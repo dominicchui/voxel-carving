@@ -7,9 +7,9 @@ pub(crate) fn carve(voxel_block: &mut VoxelBlock) {
     // carve in each of the 6 directions
 
     // positive x direction
-    for x in 0..voxel_block.length {
-        for y in 0..voxel_block.length {
-            for z in 0..voxel_block.length {
+    for x in 0..voxel_block.resolution {
+        for y in 0..voxel_block.resolution {
+            for z in 0..voxel_block.resolution {
                 let resolution = voxel_block.resolution;
                 let index = x + y * resolution + z * resolution * resolution;
                 let voxel = &mut voxel_block.voxels[index];

@@ -10,10 +10,16 @@ pub(crate) struct Image {
 }
 
 impl Image {
-    pub(crate) fn new_from_file(file_path: String, pos: Vector3<f32>, up: Vector3<f32>, focus: Vector3<f32>, height_angle: f32,) -> Self {
+    pub(crate) fn new_from_file(
+        file_path: String,
+        pos: Vector3<f32>,
+        up: Vector3<f32>,
+        focus: Vector3<f32>,
+        height_angle: f32,
+    ) -> Self {
         // read from file
         let image = open(file_path).unwrap().into_rgb8().into_vec();
-        
+
         let width = 500;
         let height = 300;
         let look = focus - pos;

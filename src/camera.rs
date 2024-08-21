@@ -10,7 +10,14 @@ pub(crate) struct Camera {
 }
 
 impl Camera {
-    pub fn new(width: u32, height: u32, pos: Vector3<f32>, look: Vector3<f32>, up: Vector3<f32>, height_angle: f32) -> Self {
+    pub fn new(
+        width: u32,
+        height: u32,
+        pos: Vector3<f32>,
+        look: Vector3<f32>,
+        up: Vector3<f32>,
+        height_angle: f32,
+    ) -> Self {
         Camera {
             width,
             height,
@@ -23,7 +30,21 @@ impl Camera {
 
     pub fn get_view_matrix(&self) -> Matrix4<f32> {
         let mtrans = Matrix4::new(
-            1.0, 0.0, 0.0, -self.pos.x, 0.0, 1.0, 0.0, -self.pos.y, 0.0, 0.0, 1.0, -self.pos.z, 0.0, 0.0, 0.0,
+            1.0,
+            0.0,
+            0.0,
+            -self.pos.x,
+            0.0,
+            1.0,
+            0.0,
+            -self.pos.y,
+            0.0,
+            0.0,
+            1.0,
+            -self.pos.z,
+            0.0,
+            0.0,
+            0.0,
             1.0,
         );
         let w = -self.look.clone().normalize();
@@ -43,5 +64,4 @@ impl Camera {
     pub fn get_aspect_ratio(&self) -> f32 {
         self.width as f32 / self.height as f32
     }
-
 }

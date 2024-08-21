@@ -1,9 +1,14 @@
-use std::{collections::HashMap, fs::File, io::Write, ops::{Index, IndexMut}};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::Write,
+    ops::{Index, IndexMut},
+};
 
 use nalgebra::Vector3;
 use ordered_float::OrderedFloat;
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub(crate) struct Voxel {
     pub(crate) color: Option<Vector3<u8>>,
 }
@@ -14,13 +19,14 @@ pub(crate) struct VoxelBlock {
     pub(crate) length: usize,
     // how many voxels per side
     pub(crate) resolution: usize,
-    // Converts from (x,y,z) coordinate to vertex number
-    pub(crate) vertex_converter: HashMap<(OrderedFloat<f32>, OrderedFloat<f32>, OrderedFloat<f32>), usize>,
 }
 
 impl Index<(OrderedFloat<f32>, OrderedFloat<f32>, OrderedFloat<f32>)> for VoxelBlock {
     type Output = Voxel;
-    fn index(&self, coordinates: (OrderedFloat<f32>, OrderedFloat<f32>, OrderedFloat<f32>)) -> &Self::Output {
+    fn index(
+        &self,
+        coordinates: (OrderedFloat<f32>, OrderedFloat<f32>, OrderedFloat<f32>),
+    ) -> &Self::Output {
         let x = coordinates.0;
         let y = coordinates.1;
         let z = coordinates.2;
@@ -30,7 +36,10 @@ impl Index<(OrderedFloat<f32>, OrderedFloat<f32>, OrderedFloat<f32>)> for VoxelB
 }
 
 impl IndexMut<(OrderedFloat<f32>, OrderedFloat<f32>, OrderedFloat<f32>)> for VoxelBlock {
-    fn index_mut(&mut self, coordinates: (OrderedFloat<f32>, OrderedFloat<f32>, OrderedFloat<f32>)) -> &mut Self::Output {
+    fn index_mut(
+        &mut self,
+        coordinates: (OrderedFloat<f32>, OrderedFloat<f32>, OrderedFloat<f32>),
+    ) -> &mut Self::Output {
         let x = coordinates.0;
         let y = coordinates.1;
         let z = coordinates.2;
@@ -49,15 +58,13 @@ impl Voxel {
     }
 }
 
-
 impl VoxelBlock {
     pub fn new(length: usize, resolution: usize) -> Self {
         Self::new_with_color(length, resolution, None)
     }
 
     pub fn new_with_color(length: usize, resolution: usize, color: Option<Vector3<u8>>) -> Self {
-        let voxels = vec![Voxel::new(color); length * length * length];
-        let mut vertex_converter = HashMap::new();
+        let voxels = vec![Voxel::new(color); resolution * resolution * resolution];
         let mut count = 1;
         // the length of a single voxel
         let voxel_length = length as f32 / resolution as f32;
@@ -68,7 +75,6 @@ impl VoxelBlock {
                     let x_f = OrderedFloat(x as f32 * voxel_length - half);
                     let y_f = OrderedFloat(y as f32 * voxel_length - half);
                     let z_f = OrderedFloat(z as f32 * voxel_length - half);
-                    vertex_converter.insert((x_f, y_f, z_f), count);
                     count += 1;
                 }
             }
@@ -78,7 +84,6 @@ impl VoxelBlock {
             voxels,
             length,
             resolution,
-            vertex_converter,
         }
     }
 
@@ -86,7 +91,7 @@ impl VoxelBlock {
         self.length as f32 / self.resolution as f32
     }
 
-    pub fn coordinate_to_index(&self, x: f32, y:f32, z: f32) -> usize {
+    pub fn coordinate_to_index(&self, x: f32, y: f32, z: f32) -> usize {
         // reshift (0,0,0) to origin
         let half = self.length as f32 / 2.0;
         let x_2 = x + half;
@@ -121,7 +126,6 @@ impl VoxelBlock {
         let f = File::create(file_path);
         let mut file = f.expect("Unable to open or create file");
 
-        let voxel_length = self.length as f32 / self.resolution as f32;
         // Write vertices
         for z in 0..=self.resolution {
             for y in 0..=self.resolution {
@@ -137,32 +141,56 @@ impl VoxelBlock {
 
         // Write faces
         // each voxel has 6 faces and 12 triangles
-        for x in 0..self.resolution {
+        for z in 0..self.resolution {
             for y in 0..self.resolution {
-                for z in 0..self.resolution {
-                    let index = x + y * self.resolution + z * self.resolution * self.resolution;
-                    let (x_f, y_f, z_f) = self.index_to_coordinate(index);
+                for x in 0..self.resolution {
+                    let voxel_index =
+                        x + y * self.resolution + z * self.resolution * self.resolution;
+                    let (x_f, y_f, z_f) = self.index_to_coordinate(voxel_index);
 
                     let x_f = OrderedFloat(x_f);
                     let y_f = OrderedFloat(y_f);
                     let z_f = OrderedFloat(z_f);
-                    println!("({},{},{})", x_f, y_f, z_f);
+                    // println!("{}: ({},{},{})", voxel_index, x_f, y_f, z_f);
 
                     // check if voxel is present
-                    if self[(x_f, y_f, z_f)].color.is_none() {
-                        continue
+                    if self.voxels[voxel_index].color.is_none() {
+                        println!("{:?}", self.voxels[voxel_index]);
+                        continue;
                     }
 
                     // Vertices
-                    let front_top_left: usize = *self.vertex_converter.get(&(x_f, y_f, z_f)).unwrap();
-                    let front_top_right: usize = *self.vertex_converter.get(&(x_f + voxel_length, y_f, z_f)).unwrap();
-                    let front_bottom_left: usize = *self.vertex_converter.get(&(x_f, y_f + voxel_length, z_f)).unwrap();
-                    let front_bottom_right: usize = *self.vertex_converter.get(&(x_f + voxel_length, y_f + voxel_length, z_f)).unwrap();
-                    let back_top_left: usize = *self.vertex_converter.get(&(x_f, y_f, z_f + voxel_length)).unwrap();
-                    let back_top_right: usize = *self.vertex_converter.get(&(x_f + voxel_length, y_f, z_f + voxel_length)).unwrap();
-                    let back_bottom_left: usize = *self.vertex_converter.get(&(x_f, y_f + voxel_length, z_f + voxel_length)).unwrap();
-                    let back_bottom_right: usize = *self.vertex_converter.get(&(x_f + voxel_length, y_f + voxel_length, z_f + voxel_length)).unwrap();
-                    
+                    // convert from voxel index to vertex index
+                    // OBJ files index starting at 1
+                    let vertex_index = x
+                        + y * (1 + self.resolution)
+                        + z * (1 + self.resolution) * (1 + self.resolution)
+                        + 1;
+
+                    // x shift is 1
+                    // y shift is 1 + resolution
+                    // z shift is (1 + resolution)^2
+                    let x_shift = 1;
+                    let y_shift = 1 + self.resolution;
+                    let z_shift = (1 + self.resolution) * (1 + self.resolution);
+
+                    let front_top_left: usize = vertex_index;
+                    let front_top_right: usize = vertex_index + x_shift;
+                    let front_bottom_left: usize = vertex_index + y_shift;
+                    let front_bottom_right: usize = vertex_index + x_shift + y_shift;
+                    let back_top_left: usize = vertex_index + z_shift;
+                    let back_top_right: usize = vertex_index + x_shift + z_shift;
+                    let back_bottom_left: usize = vertex_index + y_shift + z_shift;
+                    let back_bottom_right: usize = vertex_index + x_shift + y_shift + z_shift;
+                    // println!("front_top_left: {}", front_top_left);
+                    // println!("front_top_right: {}", front_top_right);
+                    // println!("front_bottom_left: {}", front_bottom_left);
+                    // println!("front_bottom_right: {}", front_bottom_right);
+                    // println!("back_top_left: {}", back_top_left);
+                    // println!("back_top_right: {}", back_top_right);
+                    // println!("back_bottom_left: {}", back_bottom_left);
+                    // println!("back_bottom_right: {}", back_bottom_right);
+
                     // Faces
                     // front face
                     let f1 = (front_top_left, front_bottom_left, front_top_right);
@@ -182,7 +210,7 @@ impl VoxelBlock {
                     // bottom face
                     let f11 = (front_bottom_left, back_bottom_left, front_bottom_right);
                     let f12 = (back_bottom_left, back_bottom_right, front_bottom_right);
-                
+
                     let faces = [f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12];
                     for f in faces {
                         let face: String = format!("f {} {} {}\n", f.0, f.1, f.2);
@@ -193,7 +221,6 @@ impl VoxelBlock {
             }
         }
     }
-
 }
 
 #[cfg(test)]
