@@ -10,7 +10,7 @@ use ordered_float::OrderedFloat;
 
 #[derive(Default, Clone, Debug)]
 pub(crate) struct Voxel {
-    pub(crate) color: Option<Vector3<u8>>,
+    pub(crate) carved: bool,
     pub(crate) visible: bool,
 }
 
@@ -50,29 +50,32 @@ impl IndexMut<(OrderedFloat<f32>, OrderedFloat<f32>, OrderedFloat<f32>)> for Vox
 }
 
 impl Voxel {
-    pub fn new(color: Option<Vector3<u8>>) -> Self {
-        Voxel { color, visible: false }
+    pub fn new() -> Self {
+        Voxel {
+            carved: false,
+            visible: false,
+        }
     }
 }
 
 impl VoxelBlock {
     pub fn new(length: usize, resolution: usize) -> Self {
-        Self::new_with_color(length, resolution, None)
-    }
+        let mut voxels = vec![Voxel::new(); resolution * resolution * resolution];
 
-    pub fn new_with_color(length: usize, resolution: usize, color: Option<Vector3<u8>>) -> Self {
-        let mut voxels = vec![Voxel::new(color); resolution * resolution * resolution];
-        
         // make boundary as surface
         for x in 0..resolution {
             for y in 0..resolution {
                 for z in 0..resolution {
-                    if x == 0 || x == resolution - 1 ||
-                        y == 0 || y == resolution - 1 ||
-                        z == 0 || z == resolution - 1 {
-                            let index = x + y * resolution + z * resolution * resolution;
-                            voxels[index].visible = true;
-                        }
+                    if x == 0
+                        || x == resolution - 1
+                        || y == 0
+                        || y == resolution - 1
+                        || z == 0
+                        || z == resolution - 1
+                    {
+                        let index = x + y * resolution + z * resolution * resolution;
+                        voxels[index].visible = true;
+                    }
                 }
             }
         }
@@ -150,7 +153,7 @@ impl VoxelBlock {
 
                     // check if voxel is present and visible
                     let voxel = &self.voxels[voxel_index];
-                    if !voxel.visible || voxel.color.is_none() {
+                    if !voxel.visible || voxel.carved {
                         continue;
                     }
 
@@ -161,7 +164,7 @@ impl VoxelBlock {
                         + y * (1 + self.resolution)
                         + z * (1 + self.resolution) * (1 + self.resolution)
                         + 1;
-                    
+
                     // how shifting in each direction changes the vertex index
                     let x_shift = 1;
                     let y_shift = 1 + self.resolution;
@@ -211,7 +214,7 @@ impl VoxelBlock {
         let res_squared = self.resolution * self.resolution;
         let index = x + y * self.resolution + z * res_squared;
         let voxel = &mut self.voxels[index];
-        voxel.color = None;
+        voxel.carved = true;
         voxel.visible = false;
 
         // mark 8 neighbors as visible

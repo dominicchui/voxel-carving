@@ -32,7 +32,7 @@ impl Image {
             data: image,
             camera,
             width,
-            height
+            height,
         }
     }
 }
