@@ -1,4 +1,4 @@
-use crate::voxel::{Voxel, VoxelBlock};
+use crate::voxel::VoxelBlock;
 
 /// given voxelblock and image, for each voxel, project ray to each camera and get pixel and color
 /// ray trace to see if the colors are consistent
@@ -10,11 +10,8 @@ pub(crate) fn carve(voxel_block: &mut VoxelBlock) {
     for x in 0..voxel_block.resolution {
         for y in 0..voxel_block.resolution {
             for z in 0..voxel_block.resolution {
-                let resolution = voxel_block.resolution;
-                let index = x + y * resolution + z * resolution * resolution;
-                let voxel = &mut voxel_block.voxels[index];
                 if should_carve(x, y, z) {
-                    voxel.carve();
+                    voxel_block.carve(x, y, z);
                 }
             }
         }

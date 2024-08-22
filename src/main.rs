@@ -8,7 +8,7 @@ mod carver;
 mod image;
 mod voxel;
 
-const LENGTH: usize = 2;
+const LENGTH: usize = 10;
 const RESOLUTION: usize = 10;
 
 fn main() {
@@ -29,7 +29,7 @@ fn main() {
 
     let mut voxel_block =
         VoxelBlock::new_with_color(LENGTH, RESOLUTION, Some(Vector3::new(255, 255, 255)));
-    // carve(&mut voxel_block);
+    carve(&mut voxel_block);
     voxel_block.save_to_file("./data/output/mesh.obj");
 
     let duration = start.elapsed();

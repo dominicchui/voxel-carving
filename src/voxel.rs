@@ -11,6 +11,7 @@ use ordered_float::OrderedFloat;
 #[derive(Default, Clone, Debug)]
 pub(crate) struct Voxel {
     pub(crate) color: Option<Vector3<u8>>,
+    pub(crate) visible: bool,
 }
 
 pub(crate) struct VoxelBlock {
@@ -50,11 +51,7 @@ impl IndexMut<(OrderedFloat<f32>, OrderedFloat<f32>, OrderedFloat<f32>)> for Vox
 
 impl Voxel {
     pub fn new(color: Option<Vector3<u8>>) -> Self {
-        Voxel { color }
-    }
-
-    pub fn carve(&mut self) {
-        self.color = None;
+        Voxel { color, visible: false }
     }
 }
 
@@ -64,18 +61,18 @@ impl VoxelBlock {
     }
 
     pub fn new_with_color(length: usize, resolution: usize, color: Option<Vector3<u8>>) -> Self {
-        let voxels = vec![Voxel::new(color); resolution * resolution * resolution];
-        let mut count = 1;
-        // the length of a single voxel
-        let voxel_length = length as f32 / resolution as f32;
-        let half = length as f32 / 2.0;
-        for z in 0..=resolution {
-            for y in 0..=resolution {
-                for x in 0..=resolution {
-                    let x_f = OrderedFloat(x as f32 * voxel_length - half);
-                    let y_f = OrderedFloat(y as f32 * voxel_length - half);
-                    let z_f = OrderedFloat(z as f32 * voxel_length - half);
-                    count += 1;
+        let mut voxels = vec![Voxel::new(color); resolution * resolution * resolution];
+        
+        // make boundary as surface
+        for x in 0..resolution {
+            for y in 0..resolution {
+                for z in 0..resolution {
+                    if x == 0 || x == resolution - 1 ||
+                        y == 0 || y == resolution - 1 ||
+                        z == 0 || z == resolution - 1 {
+                            let index = x + y * resolution + z * resolution * resolution;
+                            voxels[index].visible = true;
+                        }
                 }
             }
         }
@@ -92,18 +89,22 @@ impl VoxelBlock {
     }
 
     pub fn coordinate_to_index(&self, x: f32, y: f32, z: f32) -> usize {
+        Self::_coordinate_to_index(x, y, z, self.length, self.resolution)
+    }
+
+    fn _coordinate_to_index(x: f32, y: f32, z: f32, length: usize, resolution: usize) -> usize {
         // reshift (0,0,0) to origin
-        let half = self.length as f32 / 2.0;
+        let half = length as f32 / 2.0;
         let x_2 = x + half;
         let y_2 = y + half;
         let z_2 = z + half;
 
-        let voxel_length = self.voxel_length();
+        let voxel_length = length as f32 / resolution as f32;
         let x_index = (x_2 / voxel_length) as usize;
         let y_index = (y_2 / voxel_length) as usize;
         let z_index = (z_2 / voxel_length) as usize;
 
-        x_index + y_index * self.resolution + z_index * self.resolution * self.resolution
+        x_index + y_index * resolution + z_index * resolution * resolution
     }
 
     pub fn index_to_coordinate(&self, index: usize) -> (f32, f32, f32) {
@@ -146,16 +147,10 @@ impl VoxelBlock {
                 for x in 0..self.resolution {
                     let voxel_index =
                         x + y * self.resolution + z * self.resolution * self.resolution;
-                    let (x_f, y_f, z_f) = self.index_to_coordinate(voxel_index);
 
-                    let x_f = OrderedFloat(x_f);
-                    let y_f = OrderedFloat(y_f);
-                    let z_f = OrderedFloat(z_f);
-                    // println!("{}: ({},{},{})", voxel_index, x_f, y_f, z_f);
-
-                    // check if voxel is present
-                    if self.voxels[voxel_index].color.is_none() {
-                        println!("{:?}", self.voxels[voxel_index]);
+                    // check if voxel is present and visible
+                    let voxel = &self.voxels[voxel_index];
+                    if !voxel.visible || voxel.color.is_none() {
                         continue;
                     }
 
@@ -166,10 +161,8 @@ impl VoxelBlock {
                         + y * (1 + self.resolution)
                         + z * (1 + self.resolution) * (1 + self.resolution)
                         + 1;
-
-                    // x shift is 1
-                    // y shift is 1 + resolution
-                    // z shift is (1 + resolution)^2
+                    
+                    // how shifting in each direction changes the vertex index
                     let x_shift = 1;
                     let y_shift = 1 + self.resolution;
                     let z_shift = (1 + self.resolution) * (1 + self.resolution);
@@ -182,14 +175,6 @@ impl VoxelBlock {
                     let back_top_right: usize = vertex_index + x_shift + z_shift;
                     let back_bottom_left: usize = vertex_index + y_shift + z_shift;
                     let back_bottom_right: usize = vertex_index + x_shift + y_shift + z_shift;
-                    // println!("front_top_left: {}", front_top_left);
-                    // println!("front_top_right: {}", front_top_right);
-                    // println!("front_bottom_left: {}", front_bottom_left);
-                    // println!("front_bottom_right: {}", front_bottom_right);
-                    // println!("back_top_left: {}", back_top_left);
-                    // println!("back_top_right: {}", back_top_right);
-                    // println!("back_bottom_left: {}", back_bottom_left);
-                    // println!("back_bottom_right: {}", back_bottom_right);
 
                     // Faces
                     // front face
@@ -219,6 +204,48 @@ impl VoxelBlock {
                     }
                 }
             }
+        }
+    }
+
+    pub fn carve(&mut self, x: usize, y: usize, z: usize) {
+        let res_squared = self.resolution * self.resolution;
+        let index = x + y * self.resolution + z * res_squared;
+        let voxel = &mut self.voxels[index];
+        voxel.color = None;
+        voxel.visible = false;
+
+        // mark 8 neighbors as visible
+        let max_index = (res_squared * self.resolution) as i32;
+
+        let left = index as i32 - 1;
+        if left >= 0 && left < max_index {
+            let voxel = &mut self.voxels[left as usize];
+            voxel.visible = true;
+        }
+        let right = index as i32 + 1;
+        if right >= 0 && right < max_index {
+            let voxel = &mut self.voxels[right as usize];
+            voxel.visible = true;
+        }
+        let top = index as i32 - self.resolution as i32;
+        if top >= 0 && top < max_index {
+            let voxel = &mut self.voxels[top as usize];
+            voxel.visible = true;
+        }
+        let bottom = index as i32 + self.resolution as i32;
+        if bottom >= 0 && bottom < max_index {
+            let voxel = &mut self.voxels[bottom as usize];
+            voxel.visible = true;
+        }
+        let forward = index as i32 - res_squared as i32;
+        if forward >= 0 && forward < max_index {
+            let voxel = &mut self.voxels[forward as usize];
+            voxel.visible = true;
+        }
+        let back = index as i32 + res_squared as i32;
+        if back >= 0 && back < max_index {
+            let voxel = &mut self.voxels[back as usize];
+            voxel.visible = true;
         }
     }
 }
