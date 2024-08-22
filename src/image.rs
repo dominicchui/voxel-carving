@@ -7,6 +7,8 @@ pub(crate) struct Image {
     // rgb data from image
     pub(crate) data: Vec<u8>,
     pub(crate) camera: Camera,
+    pub(crate) width: usize,
+    pub(crate) height: usize,
 }
 
 impl Image {
@@ -16,17 +18,21 @@ impl Image {
         up: Vector3<f32>,
         focus: Vector3<f32>,
         height_angle: f32,
+        width: usize,
+        height: usize,
     ) -> Self {
         // read from file
         let image = open(file_path).unwrap().into_rgb8().into_vec();
 
-        let width = 500;
-        let height = 300;
         let look = focus - pos;
-        let camera = Camera::new(width, height, pos, look, up, height_angle);
+        let near = 0.001;
+        let far = 10000.0;
+        let camera = Camera::new(width, height, pos, look, up, height_angle, near, far);
         Image {
             data: image,
             camera,
+            width,
+            height
         }
     }
 }
