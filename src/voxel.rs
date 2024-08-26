@@ -12,6 +12,11 @@ use ordered_float::OrderedFloat;
 pub(crate) struct Voxel {
     pub(crate) carved: bool,
     pub(crate) visible: bool,
+    pub(crate) seen: bool,
+    // estimated (diffuse) color of the voxel
+    pub(crate) color: Option<Vector3<u8>>,
+    // estimated normal of the voxel
+    pub(crate) normal: Option<Vector3<f32>>,
 }
 
 pub(crate) struct VoxelBlock {
@@ -54,6 +59,9 @@ impl Voxel {
         Voxel {
             carved: false,
             visible: false,
+            seen: false,
+            color: None,
+            normal: None,
         }
     }
 }
@@ -83,7 +91,7 @@ impl VoxelBlock {
         VoxelBlock {
             voxels,
             length,
-            resolution,
+            resolution
         }
     }
 
@@ -216,6 +224,7 @@ impl VoxelBlock {
         let voxel = &mut self.voxels[index];
         voxel.carved = true;
         voxel.visible = false;
+        voxel.seen = true;
 
         // mark 8 neighbors as visible
         let max_index = (res_squared * self.resolution) as i32;

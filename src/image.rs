@@ -3,6 +3,7 @@ use nalgebra::Vector3;
 
 use crate::camera::Camera;
 
+#[derive(Clone)]
 pub(crate) struct Image {
     // rgb data from image
     pub(crate) data: Vec<u8>,
