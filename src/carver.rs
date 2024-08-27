@@ -1,216 +1,241 @@
 use nalgebra::{Vector3, Vector4};
 
 use crate::{
-    image::Image, raytracer::trace_ray, voxel::VoxelBlock
+    image::Image, raytracer::{generate_ray, trace_ray}, voxel::{Voxel, VoxelBlock}
 };
+
+enum Consistency {
+    Consistent(Vector3<u8>),
+    Inconsistent,
+    Inconclusive,
+    Background,
+}
+
+enum ProjectedColor {
+    Color(Vector3<u8>),
+    Background,
+    Unknown
+}
 
 /// given voxelblock and image, for each voxel, project ray to each camera and get pixel and color
 /// ray trace to see if the colors are consistent
 /// if not, then carve away
 pub(crate) fn carve(voxel_block: &mut VoxelBlock, images: &Vec<Image>) {
     // should_carve(0.0, 0.0, 0.0, image, width, height);
-    // carve in each of the 6 directions
+    // carve in each of the 6 directions until nothing left to be removed
+    let mut carving = true;
 
-    // positive x direction
-    // only select images that are looking in the correct direction
-    println!("+x");
-    let images_subset = &mut vec![];
-    for image in images {
-        let dir = image.camera.look;
-        if dir.x > 0.0 { 
-            println!("{}", image.camera.pos);
-            images_subset.push(image.clone());
-        }
-    }
-    if !images_subset.is_empty() {
-        for x in 0..voxel_block.resolution {
-            for y in 0..voxel_block.resolution {
-                for z in 0..voxel_block.resolution {
-                    // convert coordinates to object space
-                    let index = x
-                        + y * voxel_block.resolution
-                        + z * voxel_block.resolution * voxel_block.resolution;
+    while carving {
+        // reset at top of each loop
+        carving = false;
 
-                    // skip not visible voxels 
-                    let voxel = &voxel_block.voxels[index];
-                    if !voxel.visible {
-                        continue;
-                    }
-                    let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
-
-                    if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
-                        voxel_block.carve(x, y, z);
-                    }
-                }
+        // positive x direction
+        // only select images that are looking in the correct direction
+        println!("+x");
+        let images_subset = &mut vec![];
+        for image in images {
+            let dir = image.camera.look;
+            if dir.x > 0.0 { 
+                println!("{}", image.camera.pos);
+                images_subset.push(image.clone());
             }
         }
-    }
-
-    // negative x direction
-    println!("-x");
-    let images_subset = &mut vec![];
-    for image in images {
-        let dir = image.camera.look;
-        if dir.x < 0.0 { 
-            println!("{}", image.camera.pos);
-            images_subset.push(image.clone());
-        }
-    }
-
-    if !images_subset.is_empty() {
-        for x in (0..voxel_block.resolution).rev() {
-            for y in 0..voxel_block.resolution {
-                for z in 0..voxel_block.resolution {
-                    // convert coordinates to object space
-                    let index = x
-                        + y * voxel_block.resolution
-                        + z * voxel_block.resolution * voxel_block.resolution;
-
-                    // skip not visible voxels 
-                    let voxel = &voxel_block.voxels[index];
-                    if !voxel.visible {
-                        continue;
-                    }
-                    let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
-
-                    if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
-                        voxel_block.carve(x, y, z);
-                    }
-                }
-            }
-        }
-    }
-
-    // positive y direction
-    println!("+y");
-    let images_subset = &mut vec![];
-    for image in images {
-        let dir = image.camera.look;
-        if dir.y > 0.0 { 
-            println!("{}", image.camera.pos);
-            images_subset.push(image.clone());
-        }
-    }
-    if !images_subset.is_empty() {
-        for y in 0..voxel_block.resolution {
-            for x in 0..voxel_block.resolution {
-                for z in 0..voxel_block.resolution {
-                    // convert coordinates to object space
-                    let index = x
-                        + y * voxel_block.resolution
-                        + z * voxel_block.resolution * voxel_block.resolution;
-
-                    // skip not visible voxels 
-                    let voxel = &voxel_block.voxels[index];
-                    if !voxel.visible {
-                        continue;
-                    }
-                    let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
-
-                    if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
-                        voxel_block.carve(x, y, z);
-                    }
-                }
-            }
-        }
-    }
-
-    // negative y direction
-    println!("-y");
-    let images_subset = &mut vec![];
-    for image in images {
-        let dir = image.camera.look;
-        if dir.y < 0.0 { 
-            println!("{}", image.camera.pos);
-            images_subset.push(image.clone());
-        }
-    }
-
-    if !images_subset.is_empty() {
-        for y in 0..voxel_block.resolution {
-            for x in 0..voxel_block.resolution {
-                for z in 0..voxel_block.resolution {
-                    // convert coordinates to object space
-                    let index = x
-                        + y * voxel_block.resolution
-                        + z * voxel_block.resolution * voxel_block.resolution;
-
-                    // skip not visible voxels 
-                    let voxel = &voxel_block.voxels[index];
-                    if !voxel.visible {
-                        continue;
-                    }
-                    let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
-
-                    if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
-                        voxel_block.carve(x, y, z);
-                    }
-                }
-            }
-        }
-    }
-
-    // positive z direction
-    println!("+z");
-    let images_subset = &mut vec![];
-    for image in images {
-        let dir = image.camera.look;
-        if dir.z > 0.0 { 
-            println!("{}", image.camera.pos);
-            images_subset.push(image.clone());
-        }
-    }
-    if !images_subset.is_empty() {
-        for z in 0..voxel_block.resolution {
+        if !images_subset.is_empty() {
             for x in 0..voxel_block.resolution {
                 for y in 0..voxel_block.resolution {
-                    // convert coordinates to object space
-                    let index = x
-                        + y * voxel_block.resolution
-                        + z * voxel_block.resolution * voxel_block.resolution;
+                    for z in 0..voxel_block.resolution {
+                        // convert coordinates to object space
+                        let index = x
+                            + y * voxel_block.resolution
+                            + z * voxel_block.resolution * voxel_block.resolution;
 
-                    // skip not visible voxels 
-                    let voxel = &voxel_block.voxels[index];
-                    if !voxel.visible {
-                        continue;
-                    }
-                    let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
+                        // skip not visible voxels 
+                        let voxel = &voxel_block.voxels[index];
+                        if !voxel.visible {
+                            continue;
+                        }
+                        let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
 
-                    if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
-                        voxel_block.carve(x, y, z);
+                        if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
+                            carving = true;
+                            voxel_block.carve(x, y, z);
+                        }
                     }
                 }
             }
         }
-    }
-    // negative z direction
-    println!("-z");
-    let images_subset = &mut vec![];
-    for image in images {
-        let dir = image.camera.look;
-        if dir.z < 0.0 { 
-            println!("{}", image.camera.pos);
-            images_subset.push(image.clone());
+
+        // negative x direction
+        println!("-x");
+        let images_subset = &mut vec![];
+        for image in images {
+            let dir = image.camera.look;
+            if dir.x < 0.0 { 
+                println!("{}", image.camera.pos);
+                images_subset.push(image.clone());
+            }
         }
-    }
-    if !images_subset.is_empty() {
-        for z in (0..voxel_block.resolution).rev() {
-            for x in 0..voxel_block.resolution {
+        if !images_subset.is_empty() {
+            for x in (0..voxel_block.resolution).rev() {
                 for y in 0..voxel_block.resolution {
-                    // convert coordinates to object space
-                    let index = x
-                        + y * voxel_block.resolution
-                        + z * voxel_block.resolution * voxel_block.resolution;
+                    for z in 0..voxel_block.resolution {
+                        // convert coordinates to object space
+                        let index = x
+                            + y * voxel_block.resolution
+                            + z * voxel_block.resolution * voxel_block.resolution;
 
-                    // skip not visible voxels 
-                    let voxel = &voxel_block.voxels[index];
-                    if !voxel.visible {
-                        continue;
+                        // skip not visible voxels 
+                        let voxel = &voxel_block.voxels[index];
+                        if !voxel.visible {
+                            continue;
+                        }
+                        let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
+
+                        if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
+                            carving = true;
+                            voxel_block.carve(x, y, z);
+                        }
                     }
-                    let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
+                }
+            }
+        }
 
-                    if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
-                        voxel_block.carve(x, y, z);
+        // positive y direction
+        println!("+y");
+        let images_subset = &mut vec![];
+        for image in images {
+            let dir = image.camera.look;
+            if dir.y > 0.0 { 
+                println!("{}", image.camera.pos);
+                images_subset.push(image.clone());
+            }
+        }
+        if !images_subset.is_empty() {
+            for y in 0..voxel_block.resolution {
+                for x in 0..voxel_block.resolution {
+                    for z in 0..voxel_block.resolution {
+                        // convert coordinates to object space
+                        let index = x
+                            + y * voxel_block.resolution
+                            + z * voxel_block.resolution * voxel_block.resolution;
+
+                        // skip not visible voxels 
+                        let voxel = &voxel_block.voxels[index];
+                        if !voxel.visible {
+                            continue;
+                        }
+                        let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
+
+                        if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
+                            carving = true;
+                            voxel_block.carve(x, y, z);
+                        }
+                    }
+                }
+            }
+        }
+
+        // negative y direction
+        println!("-y");
+        let images_subset = &mut vec![];
+        for image in images {
+            let dir = image.camera.look;
+            if dir.y < 0.0 { 
+                println!("{}", image.camera.pos);
+                images_subset.push(image.clone());
+            }
+        }
+        if !images_subset.is_empty() {
+            for y in 0..voxel_block.resolution {
+                for x in 0..voxel_block.resolution {
+                    for z in 0..voxel_block.resolution {
+                        // convert coordinates to object space
+                        let index = x
+                            + y * voxel_block.resolution
+                            + z * voxel_block.resolution * voxel_block.resolution;
+
+                        // skip not visible voxels 
+                        let voxel = &voxel_block.voxels[index];
+                        if !voxel.visible {
+                            continue;
+                        }
+                        let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
+
+                        if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
+                            // println!("carving {index}");
+                            carving = true;
+                            voxel_block.carve(x, y, z);
+                            // println!("still visible? {}", voxel_block.voxels[index].visible);
+                        }
+                    }
+                }
+            }
+        }
+
+        // positive z direction
+        println!("+z");
+        let images_subset = &mut vec![];
+        for image in images {
+            let dir = image.camera.look;
+            if dir.z > 0.0 { 
+                println!("{}", image.camera.pos);
+                images_subset.push(image.clone());
+            }
+        }
+        if !images_subset.is_empty() {
+            for z in 0..voxel_block.resolution {
+                for x in 0..voxel_block.resolution {
+                    for y in 0..voxel_block.resolution {
+                        // convert coordinates to object space
+                        let index = x
+                            + y * voxel_block.resolution
+                            + z * voxel_block.resolution * voxel_block.resolution;
+
+                        // skip not visible voxels 
+                        let voxel = &voxel_block.voxels[index];
+                        if !voxel.visible {
+                            continue;
+                        }
+                        let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
+
+                        if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
+                            carving = true;
+                            voxel_block.carve(x, y, z);
+                        }
+                    }
+                }
+            }
+        }
+        // negative z direction
+        println!("-z");
+        let images_subset = &mut vec![];
+        for image in images {
+            let dir = image.camera.look;
+            if dir.z < 0.0 { 
+                println!("{}", image.camera.pos);
+                images_subset.push(image.clone());
+            }
+        }
+        if !images_subset.is_empty() {
+            for z in (0..voxel_block.resolution).rev() {
+                for x in 0..voxel_block.resolution {
+                    for y in 0..voxel_block.resolution {
+                        // convert coordinates to object space
+                        let index = x
+                            + y * voxel_block.resolution
+                            + z * voxel_block.resolution * voxel_block.resolution;
+
+                        // skip not visible voxels 
+                        let voxel = &voxel_block.voxels[index];
+                        if !voxel.visible {
+                            continue;
+                        }
+                        let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
+
+                        if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
+                            carving = true;
+                            voxel_block.carve(x, y, z);
+                        }
                     }
                 }
             }
@@ -219,59 +244,80 @@ pub(crate) fn carve(voxel_block: &mut VoxelBlock, images: &Vec<Image>) {
 }
 
 fn should_carve(voxel_block: &mut VoxelBlock, index: usize, x: f32, y: f32, z: f32, images: &Vec<Image>) -> bool {
-    if let Some(color) = get_consistent_color(x, y, z, images) {
-        // set voxel
-        let voxel = &mut voxel_block.voxels[index];
-        voxel.color = Some(color);
-        if color!=Vector3::zeros() {
-            // println!("color: {}", color);
+    println!("index {index}, coords ({x},{y},{z})");
+    match get_consistent_color(x, y, z, images, voxel_block) {
+        Consistency::Consistent(color) => {
+            println!("consistent {index} with color ({},{},{})", color[0], color[1], color[2]);
+            // set voxel
+            let voxel = &mut voxel_block.voxels[index];
+            voxel.color = Some(color);
+            voxel.seen = true;
             false
-        } else {
-            // background pixel is black
+        },
+        Consistency::Inconsistent => {
+            println!("inconsistent {index}");
             true
-        }
-    } else {
-        true
+        },
+        Consistency::Inconclusive => {
+            // println!("inconclusive {index}");
+            let voxel = &mut voxel_block.voxels[index];
+            voxel.seen = true;
+            false
+        },
+        Consistency::Background => {
+            println!("background {index}");
+            true
+        },
     }
 }
 
-fn get_consistent_color(x: f32, y: f32, z: f32, images: &Vec<Image>) -> Option<Vector3<u8>> {
+fn get_consistent_color(x: f32, y: f32, z: f32, images: &Vec<Image>, voxel_block: &VoxelBlock) -> Consistency {
     // for each image, project voxel to get projected pixel color
     // if all images roughly agree on color, then it is consistent
     let mut estimated_color: Option<Vector3<u8>> = None;
-    // let mut estimated_normal: Option<Vector3<f32>> = Some(Vector3::zeros());
     for image in images {
-        if let Some((r,g,b)) = get_projected_pixel_color(x, y, z, image) {
-            let proj_color = Vector3::new(r,g,b);
-            // if proj_color == Vector3::zeros() { return None } //todo remove
-            
-            // check if colors are similar
-            // todo support black as a reasonable color
-            if let Some(est_color) = estimated_color {
-                if is_roughly_equal(est_color[0], r) &&
-                    is_roughly_equal(est_color[1], g) && 
-                    is_roughly_equal(est_color[2], b) {
-                    estimated_color = Some(average(est_color, proj_color));
-                    // estimated_normal = (estimated_normal + ray_traced_normal) / 2.0;
+        match get_projected_pixel_color(x, y, z, image, voxel_block) {
+            ProjectedColor::Color(proj_color) => {
+                // println!("({r},{g},{b})");
+                
+                // check if colors are similar
+                if let Some(est_color) = estimated_color {
+                    if is_roughly_equal(est_color[0], proj_color[0]) &&
+                        is_roughly_equal(est_color[1], proj_color[1]) && 
+                        is_roughly_equal(est_color[2], proj_color[2]) {
+                        estimated_color = Some(average(est_color, proj_color));
+                    } else {
+                        // colors are inconsistent
+                        println!("not equal: {}, {}", est_color,proj_color);
+                        return Consistency::Inconsistent;
+                    }
                 } else {
-                    // colors are inconsistent
-                    // println!("not equal: {}, {}", est_color,proj_color);
-                    return None;
+                    estimated_color = Some(proj_color);
                 }
-            } else {
-                estimated_color = Some(proj_color);
-            }
+            },
+            // if no projected color, then not visible so don't do anything
+            ProjectedColor::Unknown => {},
+            ProjectedColor::Background => {return Consistency::Background;},
         }
-        // if no projected color, then not visible so ignore        
     }
-    estimated_color
+    if let Some(color) = estimated_color {
+        Consistency::Consistent(color)
+    } else {
+        Consistency::Inconclusive
+    }
 }
 
-fn get_projected_pixel_color(x: f32, y: f32, z: f32, image: &Image) -> Option<(u8, u8, u8)> {
+pub fn project_coordinate(x: f32, y: f32, z: f32, image: &Image, voxel_block: &VoxelBlock) -> Option<(usize,usize)> {
+    // center the coordinate in the voxel
+    let half_voxel_length = voxel_block.length as f32 / voxel_block.resolution as f32 / 2.0;
+    let x_half = x + half_voxel_length;
+    let y_half = y + half_voxel_length;
+    let z_half = z + half_voxel_length;
+    println!("shifted ({x_half},{y_half},{z_half})");
     // convert from world space to projected/clip space
     let proj_coord = image.camera.proj_matrix
         * image.camera.view_matrix
-        * Vector4::new(x, y, z, 1.0);
+        * Vector4::new(x_half, y_half, z_half, 1.0);
 
     // normalize
     let normed_coord = Vector3::new(
@@ -288,23 +334,88 @@ fn get_projected_pixel_color(x: f32, y: f32, z: f32, image: &Image) -> Option<(u
     // check bounds
     if x_index < 0 || x_index >= image.width as i32 || y_index < 0 || y_index >= image.height as i32
     {
-        return None;
+        None
+    } else {
+        Some((x_index as usize, y_index as usize))
     }
-    let x_index = x_index as usize;
-    let y_index = y_index as usize;
-    let image_index = x_index + y_index * image.width;
+}
 
-    // println!("original: ({},{},{})", x, y, z);
-    // println!("view: ({},{},{})", view_coord[0], view_coord[1], view_coord[2]);
-    // println!("projected: ({},{},{})", proj_coord[0], proj_coord[1], proj_coord[2]);
-    // println!("normed: ({},{},{})", normed_coord[0], normed_coord[1], normed_coord[2]);
-    // println!("index: ({},{})", x_index, y_index);
+fn get_projected_pixel_color(x: f32, y: f32, z: f32, image: &Image, voxel_block: &VoxelBlock) -> ProjectedColor {
+    if let Some((x_index, y_index)) = project_coordinate(x, y, z, image, voxel_block) {
+        let image_index = x_index + y_index * image.width;
+        println!("projected to {x_index}, {y_index}");
 
-    let r = image.data[image_index * 3];
-    let g = image.data[image_index * 3 + 1];
-    let b = image.data[image_index * 3 + 2];
-    // println!("color: ({},{},{})", r, g, b);
-    Some((r, g, b))
+        // check if voxel is occluded
+        let ray = generate_ray(x_index, y_index, 1.0, &image.camera);
+        let dir = ray.d;
+        let pos = ray.p;
+        if let Some(intersect) = trace_ray(&ray, voxel_block) {
+            let expected_index = voxel_block.coordinate_to_index(x, y, z);
+            if intersect != expected_index {
+                // occluded
+                println!("ray dir: {}", dir);
+                println!("ray pos: {}", pos);
+                println!("({x_index},{y_index}): expected {expected_index}, actual {intersect}");
+                // return ProjectedColor::Unknown
+            }
+        } else {
+            // background detected (shouldn't happen??)
+            println!("({x_index},{y_index}) with ray pos {} and dir {} going to background unexpectedly", ray.p, ray.d);
+            // panic!();
+            // return ProjectedColor::Background;
+        }
+
+        // println!("original: ({},{},{})", x, y, z);
+        // println!("view: ({},{},{})", view_coord[0], view_coord[1], view_coord[2]);
+        // println!("projected: ({},{},{})", proj_coord[0], proj_coord[1], proj_coord[2]);
+        // println!("normed: ({},{},{})", normed_coord[0], normed_coord[1], normed_coord[2]);
+        // println!("index: ({},{})", x_index, y_index);
+
+        let r = image.data[image_index * 3];
+        let g = image.data[image_index * 3 + 1];
+        let b = image.data[image_index * 3 + 2];
+        println!("color: ({},{},{})", r, g, b);
+        if r == 0 && g == 0 && b ==0  {
+            ProjectedColor::Background
+        } else {
+            ProjectedColor::Color(Vector3::new(r, g, b))
+        }
+    } else {
+        // out of view for this image
+        ProjectedColor::Unknown
+    }
+    // // center the coordinate in the voxel
+    // let half_voxel_length = voxel_block.length as f32 / voxel_block.resolution as f32 / 2.0;
+    // let x_half = x + half_voxel_length;
+    // let y_half = y + half_voxel_length;
+    // let z_half = z + half_voxel_length;
+    // println!("shifted ({x_half},{y_half},{z_half})");
+    // // convert from world space to projected/clip space
+    // let proj_coord: Vector3<f32> = Vector3::zeros();
+    // // image.camera.proj_matrix
+    // //     * image.camera.view_matrix
+    // //     * Vector4::new(x_half, y_half, z_half, 1.0);
+
+    // // normalize
+    // let normed_coord = Vector3::new(
+    //     proj_coord[0] / proj_coord[3],
+    //     proj_coord[1] / proj_coord[3],
+    //     proj_coord[2] / proj_coord[3],
+    // );
+
+    // // clip space goes from (-1,-1,0) to (1,1,1)
+    // // discard Z, and transform into image coordinates
+    // let x_index = ((normed_coord[0] + 1.0) / 2.0 * image.width as f32) as i32;
+    // let y_index = ((normed_coord[1] + 1.0) / 2.0 * image.height as f32) as i32;
+
+    // // check bounds
+    // if x_index < 0 || x_index >= image.width as i32 || y_index < 0 || y_index >= image.height as i32
+    // {
+    //     return ProjectedColor::Unknown;
+    // }
+    // let x_index = x_index as usize;
+    // let y_index = y_index as usize;
+    
 }
 
 

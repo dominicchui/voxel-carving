@@ -5,7 +5,7 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use nalgebra::Vector3;
+use nalgebra::{base, Matrix4, Translation3, Vector3, Vector4};
 use ordered_float::OrderedFloat;
 
 #[derive(Default, Clone, Debug)]
@@ -15,8 +15,8 @@ pub(crate) struct Voxel {
     pub(crate) seen: bool,
     // estimated (diffuse) color of the voxel
     pub(crate) color: Option<Vector3<u8>>,
-    // estimated normal of the voxel
-    pub(crate) normal: Option<Vector3<f32>>,
+    pub(crate) ctm: Matrix4<f32>,
+    pub(crate) inverse_ctm: Matrix4<f32>,
 }
 
 pub(crate) struct VoxelBlock {
@@ -61,7 +61,8 @@ impl Voxel {
             visible: false,
             seen: false,
             color: None,
-            normal: None,
+            ctm: Matrix4::identity(),
+            inverse_ctm: Matrix4::identity()
         }
     }
 }
@@ -69,11 +70,17 @@ impl Voxel {
 impl VoxelBlock {
     pub fn new(length: usize, resolution: usize) -> Self {
         let mut voxels = vec![Voxel::new(); resolution * resolution * resolution];
-
-        // make boundary as surface
+        
+        let voxel_length = length as f32 / resolution as f32;
+        let baseline_shift = -(length as f32 / 2.0 - 0.5 * voxel_length);
+        println!("voxel_length: {}", voxel_length);
+        println!("baseline_shift: {}", baseline_shift);
+        
+        // make boundary as surface and set CTM
         for x in 0..resolution {
             for y in 0..resolution {
                 for z in 0..resolution {
+                    let index = x + y * resolution + z * resolution * resolution;
                     if x == 0
                         || x == resolution - 1
                         || y == 0
@@ -81,9 +88,15 @@ impl VoxelBlock {
                         || z == 0
                         || z == resolution - 1
                     {
-                        let index = x + y * resolution + z * resolution * resolution;
                         voxels[index].visible = true;
                     }
+
+                    // ctm
+                    let ctm = Self::calculate_ctm(x, y, z, voxel_length, baseline_shift);
+                    let inverse_ctm = ctm.try_inverse().unwrap();
+
+                    voxels[index].ctm = ctm;
+                    voxels[index].inverse_ctm = inverse_ctm;
                 }
             }
         }
@@ -134,6 +147,21 @@ impl VoxelBlock {
         (x - half, y - half, z - half)
     }
 
+    fn calculate_ctm(x: usize, y: usize, z: usize, voxel_length: f32, baseline_shift: f32) -> Matrix4<f32> {
+        let scale = Matrix4::new_scaling(voxel_length);
+        let trans = Self::translation(x, y, z, voxel_length, baseline_shift);
+        let mat: Matrix4<f32> = Matrix4::identity();
+        mat * trans * scale
+    }
+
+    fn translation(x: usize, y: usize, z: usize, voxel_length: f32, baseline_shift: f32) -> Matrix4<f32> {
+        let x_shift = x as f32 * voxel_length + baseline_shift;
+        let y_shift = y as f32 * voxel_length + baseline_shift;
+        let z_shift = z as f32 * voxel_length + baseline_shift;
+        let t = Translation3::new(x_shift, y_shift, z_shift);
+        t.to_homogeneous()
+    }
+
     pub fn save_to_file(self, file_path: &str) {
         let f = File::create(file_path);
         let mut file = f.expect("Unable to open or create file");
@@ -151,6 +179,10 @@ impl VoxelBlock {
 
         file.write_all(b"\n").expect("Unable to write to file");
 
+        let mut carved = 0;
+        let mut consistent = 0;
+        let mut inconclusive = 0;
+
         // Write faces
         // each voxel has 6 faces and 12 triangles
         for z in 0..self.resolution {
@@ -159,9 +191,20 @@ impl VoxelBlock {
                     let voxel_index =
                         x + y * self.resolution + z * self.resolution * self.resolution;
 
-                    // check if voxel is present and visible
+                    // check if voxel is present, seen, and visible
                     let voxel = &self.voxels[voxel_index];
-                    if !voxel.visible || voxel.carved {
+                    if voxel.carved {
+                        carved += 1;
+                        continue;
+                    }
+                    if voxel.seen {
+                        if voxel.color.is_some() {
+                            consistent += 1;
+                        } else {
+                            inconclusive += 1;
+                        }
+                    }
+                    if !voxel.visible || voxel.carved {//|| voxel.color.is_none() {
                         continue;
                     }
 
@@ -216,6 +259,9 @@ impl VoxelBlock {
                 }
             }
         }
+        println!("Consistent {consistent}");
+        println!("Carved {carved}");
+        println!("Inconclusive {inconclusive}");
     }
 
     pub fn carve(&mut self, x: usize, y: usize, z: usize) {
@@ -225,6 +271,7 @@ impl VoxelBlock {
         voxel.carved = true;
         voxel.visible = false;
         voxel.seen = true;
+        println!("carve {index}");
 
         // mark 8 neighbors as visible
         let max_index = (res_squared * self.resolution) as i32;
@@ -232,38 +279,99 @@ impl VoxelBlock {
         let left = index as i32 - 1;
         if left >= 0 && left < max_index {
             let voxel = &mut self.voxels[left as usize];
-            voxel.visible = true;
+            if !voxel.carved {
+                voxel.visible = true;
+            }
         }
         let right = index as i32 + 1;
         if right >= 0 && right < max_index {
             let voxel = &mut self.voxels[right as usize];
-            voxel.visible = true;
+            if !voxel.carved {
+                voxel.visible = true;
+            }
         }
         let top = index as i32 - self.resolution as i32;
         if top >= 0 && top < max_index {
             let voxel = &mut self.voxels[top as usize];
-            voxel.visible = true;
+            if !voxel.carved {
+                voxel.visible = true;
+            }
         }
         let bottom = index as i32 + self.resolution as i32;
         if bottom >= 0 && bottom < max_index {
             let voxel = &mut self.voxels[bottom as usize];
-            voxel.visible = true;
+            if !voxel.carved {
+                voxel.visible = true;
+            }
         }
         let forward = index as i32 - res_squared as i32;
         if forward >= 0 && forward < max_index {
             let voxel = &mut self.voxels[forward as usize];
-            voxel.visible = true;
+            if !voxel.carved {
+                voxel.visible = true;
+            }
         }
         let back = index as i32 + res_squared as i32;
         if back >= 0 && back < max_index {
             let voxel = &mut self.voxels[back as usize];
-            voxel.visible = true;
+            if !voxel.carved {
+                voxel.visible = true;
+            }
         }
     }
 }
 
+pub(crate) fn find_cube_intersect(voxel: &Voxel, p: Vector4<f32>, d: Vector4<f32>) -> Option<f32> {
+    let error: f32 = 0.00001;
+    let p = voxel.inverse_ctm * p;
+    let d = voxel.inverse_ctm * d + error * d;
+    let t_x_neg = (-0.5 - p.x) / d.x;
+    let t_x_pos = (0.5 - p.x) / d.x;
+    let t_y_neg = (-0.5 - p.y) / d.y;
+    let t_y_pos = (0.5 - p.y) / d.y;
+    let t_z_neg = (-0.5 - p.z) / d.z;
+    let t_z_pos = (0.5 - p.z) / d.z;
+    let candidate_ts = [t_x_neg, t_x_pos, t_y_neg, t_y_pos, t_z_neg, t_z_pos];
+    let mut valid_ts: Vec<f32> = Vec::new();
+
+    for t in candidate_ts.into_iter() {
+        if is_valid_cube_t(p, d, t) {
+            valid_ts.push(t);
+        }
+    }
+
+    if valid_ts.is_empty() {
+        None
+    } else {
+        valid_ts.sort_by(|a, b| a.total_cmp(b));
+        Some(valid_ts[0])
+    }
+}
+
+pub(crate) fn is_valid_cube_t(p: Vector4<f32>, d: Vector4<f32>, t: f32) -> bool {
+    if t <= 0.0 {
+        return false;
+    }
+    let intersect = p + t * d;
+    let x = intersect[0];
+    let y = intersect[1];
+    let z = intersect[2];
+
+    let bounds = 0.5 + 0.0001;
+
+    // check finite boundaries
+    !(x < -bounds
+        || x > bounds
+        || y < -bounds
+        || y > bounds
+        || z < -bounds
+        || z > bounds)
+}
+
 #[cfg(test)]
 mod tests {
+    use nalgebra::Vector4;
+
     use super::VoxelBlock;
 
     #[test]
@@ -277,5 +385,23 @@ mod tests {
         assert_eq!(voxel_block.index_to_coordinate(1), (-4.0, -5.0, -5.0));
         assert_eq!(voxel_block.index_to_coordinate(11), (-4.0, -4.0, -5.0));
         assert_eq!(voxel_block.index_to_coordinate(111), (-4.0, -4.0, -4.0));
+    }
+
+    #[test]
+    fn test_ctm() {
+        let voxel_block = VoxelBlock::new(2, 2);
+        let voxel = &voxel_block.voxels[0];
+        // convert to world space
+        let ctm = voxel.ctm;
+        println!("ctm {}", ctm);
+        assert_eq!(ctm * Vector4::new(-0.5, -0.5, -0.5, 1.0), Vector4::new(-1.0,-1.0,-1.0, 1.0));
+        assert_eq!(ctm * Vector4::new(0.0, 0.0, 0.0, 1.0), Vector4::new(-0.5,-0.5,-0.5, 1.0));
+
+        let voxel = &voxel_block.voxels[3];
+        // convert to world space
+        let ctm = voxel.ctm;
+        println!("ctm {}", ctm);
+        assert_eq!(ctm * Vector4::new(-0.5, -0.5, -0.5, 1.0), Vector4::new(0.0,0.0,-1.0, 1.0));
+        assert_eq!(ctm * Vector4::new(0.0, 0.0, 0.0, 1.0), Vector4::new(0.5,0.5,-0.5, 1.0));
     }
 }
