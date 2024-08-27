@@ -196,15 +196,12 @@ impl VoxelBlock {
                     if voxel.carved {
                         carved += 1;
                         continue;
+                    } else if voxel.color.is_some() {
+                        consistent += 1;
+                    } else {
+                        inconclusive += 1;
                     }
-                    if voxel.seen {
-                        if voxel.color.is_some() {
-                            consistent += 1;
-                        } else {
-                            inconclusive += 1;
-                        }
-                    }
-                    if !voxel.visible || voxel.carved {//|| voxel.color.is_none() {
+                    if !voxel.visible || voxel.color.is_none() {
                         continue;
                     }
 
@@ -271,7 +268,7 @@ impl VoxelBlock {
         voxel.carved = true;
         voxel.visible = false;
         voxel.seen = true;
-        println!("carve {index}");
+        println!("carve {index} at ({x},{y},{z})");
 
         // mark 8 neighbors as visible
         let max_index = (res_squared * self.resolution) as i32;
@@ -321,10 +318,13 @@ impl VoxelBlock {
     }
 }
 
-pub(crate) fn find_cube_intersect(voxel: &Voxel, p: Vector4<f32>, d: Vector4<f32>) -> Option<f32> {
-    let error: f32 = 0.00001;
-    let p = voxel.inverse_ctm * p;
-    let d = voxel.inverse_ctm * d + error * d;
+pub(crate) fn find_cube_intersect(voxel: &Voxel, pos: Vector4<f32>, dir: Vector4<f32>) -> Option<f32> {
+    // let error: f32 = 0.001;
+    let p = voxel.inverse_ctm * pos;
+    let d = voxel.inverse_ctm * dir; //+ error * dir;
+    // println!("world-space p {pos}");
+    // println!("object-space p {p}");
+    // println!("dir {d}");
     let t_x_neg = (-0.5 - p.x) / d.x;
     let t_x_pos = (0.5 - p.x) / d.x;
     let t_y_neg = (-0.5 - p.y) / d.y;
@@ -332,13 +332,16 @@ pub(crate) fn find_cube_intersect(voxel: &Voxel, p: Vector4<f32>, d: Vector4<f32
     let t_z_neg = (-0.5 - p.z) / d.z;
     let t_z_pos = (0.5 - p.z) / d.z;
     let candidate_ts = [t_x_neg, t_x_pos, t_y_neg, t_y_pos, t_z_neg, t_z_pos];
+    // println!("candidate_ts {candidate_ts:?}");
     let mut valid_ts: Vec<f32> = Vec::new();
 
     for t in candidate_ts.into_iter() {
+        // println!("t: {t}");
         if is_valid_cube_t(p, d, t) {
             valid_ts.push(t);
         }
     }
+    // println!("valid_ts {valid_ts:?}");
 
     if valid_ts.is_empty() {
         None
@@ -352,27 +355,29 @@ pub(crate) fn is_valid_cube_t(p: Vector4<f32>, d: Vector4<f32>, t: f32) -> bool 
     if t <= 0.0 {
         return false;
     }
-    let intersect = p + t * d;
+    let intersect = p + (t+0.001) * d;
     let x = intersect[0];
     let y = intersect[1];
     let z = intersect[2];
 
-    let bounds = 0.5 + 0.0001;
+    let bounds = 0.5;
+
+    // println!("({x},{y},{z})");
 
     // check finite boundaries
-    !(x < -bounds
-        || x > bounds
-        || y < -bounds
-        || y > bounds
-        || z < -bounds
-        || z > bounds)
+    !(x <= -bounds
+        || x >= bounds
+        || y <= -bounds
+        || y >= bounds
+        || z <= -bounds
+        || z >= bounds)
 }
 
 #[cfg(test)]
 mod tests {
     use nalgebra::Vector4;
 
-    use super::VoxelBlock;
+    use super::{find_cube_intersect, VoxelBlock};
 
     #[test]
     fn test_indexing() {
@@ -403,5 +408,25 @@ mod tests {
         println!("ctm {}", ctm);
         assert_eq!(ctm * Vector4::new(-0.5, -0.5, -0.5, 1.0), Vector4::new(0.0,0.0,-1.0, 1.0));
         assert_eq!(ctm * Vector4::new(0.0, 0.0, 0.0, 1.0), Vector4::new(0.5,0.5,-0.5, 1.0));
+    }
+
+    #[test]
+    fn test_intercept() {
+        let voxel_block = VoxelBlock::new(2, 2);
+        let voxel = &voxel_block.voxels[4];
+        let pos = Vector4::new(-0.5, -0.5, 2.5, 1.0);
+        let (x,y,z) = voxel_block.index_to_coordinate(4);
+        let half_voxel_length = 0.5;
+        let voxel_pos = Vector4::new(x+half_voxel_length,y+half_voxel_length,z+half_voxel_length,1.0);
+        println!("voxel pos {voxel_pos}");
+        let dir = voxel_pos - pos;
+
+        let intercept_0 = find_cube_intersect(voxel, pos, dir).unwrap();
+
+        let voxel_1 = &voxel_block.voxels[0];
+        let intercept_1 = find_cube_intersect(voxel_1, pos, dir).unwrap();
+        println!("intercept 0: {intercept_0}, 1: {intercept_1}");
+
+        // assert!(intercept.is_some());
     }
 }

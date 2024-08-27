@@ -66,7 +66,7 @@ impl Camera {
         remapping[14] = -1.0;
 
         let proj_matrix = remapping * unhinging * scaling;
-        println!("proj_matrix {proj_matrix}");
+        // println!("proj_matrix {proj_matrix}");
 
         Camera {
             width,

@@ -152,42 +152,42 @@ pub(crate) fn cone() -> Vec<Image> {
         width,
         height,
     );
-    // let image_5 = Image::new_from_file(
-    //     "./data/input/cone/cone_3,3,3.png".to_owned(),
-    //     Vector3::new(3.0, 3.0, 3.0),
-    //     up,
-    //     focus,
-    //     height_angle,
-    //     width,
-    //     height,
-    // );
-    // let image_6 = Image::new_from_file(
-    //     "./data/input/cone/cone_3,-05,0.png".to_owned(),
-    //     Vector3::new(3.0, -0.5, 0.0),
-    //     up,
-    //     focus,
-    //     height_angle,
-    //     width,
-    //     height,
-    // );
-    // let image_7 = Image::new_from_file(
-    //     "./data/input/cone/cone_-3,-05,0.png".to_owned(),
-    //     Vector3::new(-3.0, -0.5, 0.0),
-    //     up,
-    //     focus,
-    //     height_angle,
-    //     width,
-    //     height,
-    // );
-    // let image_8 = Image::new_from_file(
-    //     "./data/input/cone/cone_-3,-05,0.png".to_owned(),
-    //     Vector3::new(0.0, -0.5, 3.0),
-    //     up,
-    //     focus,
-    //     height_angle,
-    //     width,
-    //     height,
-    // );
+    let image_5 = Image::new_from_file(
+        "./data/input/cone/cone_3,-05,0.png".to_owned(),
+        Vector3::new(3.0, -0.5, 0.0),
+        up,
+        focus,
+        height_angle,
+        width,
+        height,
+    );
+    let image_6 = Image::new_from_file(
+        "./data/input/cone/cone_-3,-05,0.png".to_owned(),
+        Vector3::new(-3.0, -0.5, 0.0),
+        up,
+        focus,
+        height_angle,
+        width,
+        height,
+    );
+    let image_7 = Image::new_from_file(
+        "./data/input/cone/cone_0,-05,3.png".to_owned(),
+        Vector3::new(0.0, -0.5, 3.0),
+        up,
+        focus,
+        height_angle,
+        width,
+        height,
+    );
+    let image_8 = Image::new_from_file(
+        "./data/input/cone/cone_0,-05,-3.png".to_owned(),
+        Vector3::new(0.0, -0.5, -3.0),
+        up,
+        focus,
+        height_angle,
+        width,
+        height,
+    );
     // let image_9 = Image::new_from_file(
     //     "./data/input/cone/cone_-3,-05,0.png".to_owned(),
     //     Vector3::new(0.0, -0.5, -3.0),
@@ -197,5 +197,5 @@ pub(crate) fn cone() -> Vec<Image> {
     //     width,
     //     height,
     // );
-    vec![image_0, image_1, image_2]//, image_3, image_4]//, image_5, image_6, image_7, image_8, image_9]
+    vec![image_0, image_1, image_2, image_3, image_4]//, image_5, image_6, image_7, image_8]
 }

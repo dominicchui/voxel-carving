@@ -10,7 +10,7 @@ mod scene_generator;
 mod raytracer;
 mod voxel;
 
-const LENGTH: usize = 2;
+const LENGTH: usize = 4;
 const RESOLUTION: usize = 10;
 
 fn main() {

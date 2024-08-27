@@ -1,7 +1,7 @@
 use nalgebra::{Vector3, Vector4};
 
 use crate::{
-    image::Image, raytracer::{generate_ray, trace_ray}, voxel::{Voxel, VoxelBlock}
+    image::Image, raytracer::{generate_ray, generate_ray_direct, trace_ray}, voxel::{Voxel, VoxelBlock}
 };
 
 enum Consistency {
@@ -12,7 +12,7 @@ enum Consistency {
 }
 
 enum ProjectedColor {
-    Color(Vector3<u8>),
+    Color(Vector3<u8>, usize),
     Background,
     Unknown
 }
@@ -26,6 +26,7 @@ pub(crate) fn carve(voxel_block: &mut VoxelBlock, images: &Vec<Image>) {
     let mut carving = true;
 
     while carving {
+        println!("loop!");
         // reset at top of each loop
         carving = false;
 
@@ -35,7 +36,7 @@ pub(crate) fn carve(voxel_block: &mut VoxelBlock, images: &Vec<Image>) {
         let images_subset = &mut vec![];
         for image in images {
             let dir = image.camera.look;
-            if dir.x > 0.0 { 
+            if dir.x >= 0.0 { 
                 println!("{}", image.camera.pos);
                 images_subset.push(image.clone());
             }
@@ -70,7 +71,7 @@ pub(crate) fn carve(voxel_block: &mut VoxelBlock, images: &Vec<Image>) {
         let images_subset = &mut vec![];
         for image in images {
             let dir = image.camera.look;
-            if dir.x < 0.0 { 
+            if dir.x <= 0.0 { 
                 println!("{}", image.camera.pos);
                 images_subset.push(image.clone());
             }
@@ -146,7 +147,7 @@ pub(crate) fn carve(voxel_block: &mut VoxelBlock, images: &Vec<Image>) {
             }
         }
         if !images_subset.is_empty() {
-            for y in 0..voxel_block.resolution {
+            for y in (0..voxel_block.resolution).rev() {
                 for x in 0..voxel_block.resolution {
                     for z in 0..voxel_block.resolution {
                         // convert coordinates to object space
@@ -162,10 +163,8 @@ pub(crate) fn carve(voxel_block: &mut VoxelBlock, images: &Vec<Image>) {
                         let (x_f, y_f, z_f) = voxel_block.index_to_coordinate(index);
 
                         if should_carve(voxel_block, index, x_f, y_f, z_f, images_subset) {
-                            // println!("carving {index}");
                             carving = true;
                             voxel_block.carve(x, y, z);
-                            // println!("still visible? {}", voxel_block.voxels[index].visible);
                         }
                     }
                 }
@@ -177,7 +176,7 @@ pub(crate) fn carve(voxel_block: &mut VoxelBlock, images: &Vec<Image>) {
         let images_subset = &mut vec![];
         for image in images {
             let dir = image.camera.look;
-            if dir.z > 0.0 { 
+            if dir.z >= 0.0 { 
                 println!("{}", image.camera.pos);
                 images_subset.push(image.clone());
             }
@@ -243,15 +242,15 @@ pub(crate) fn carve(voxel_block: &mut VoxelBlock, images: &Vec<Image>) {
     }
 }
 
-fn should_carve(voxel_block: &mut VoxelBlock, index: usize, x: f32, y: f32, z: f32, images: &Vec<Image>) -> bool {
-    println!("index {index}, coords ({x},{y},{z})");
+fn should_carve(voxel_block: &mut VoxelBlock, index: usize, x: f32, y: f32, z: f32, images: &mut Vec<Image>) -> bool {
+    // println!("index {index}, coords ({x},{y},{z})");
     match get_consistent_color(x, y, z, images, voxel_block) {
         Consistency::Consistent(color) => {
             println!("consistent {index} with color ({},{},{})", color[0], color[1], color[2]);
             // set voxel
             let voxel = &mut voxel_block.voxels[index];
             voxel.color = Some(color);
-            voxel.seen = true;
+            // voxel.seen = true;
             false
         },
         Consistency::Inconsistent => {
@@ -259,9 +258,9 @@ fn should_carve(voxel_block: &mut VoxelBlock, index: usize, x: f32, y: f32, z: f
             true
         },
         Consistency::Inconclusive => {
-            // println!("inconclusive {index}");
-            let voxel = &mut voxel_block.voxels[index];
-            voxel.seen = true;
+            println!("inconclusive {index}");
+            // let voxel = &mut voxel_block.voxels[index];
+            // voxel.seen = true;
             false
         },
         Consistency::Background => {
@@ -271,14 +270,16 @@ fn should_carve(voxel_block: &mut VoxelBlock, index: usize, x: f32, y: f32, z: f
     }
 }
 
-fn get_consistent_color(x: f32, y: f32, z: f32, images: &Vec<Image>, voxel_block: &VoxelBlock) -> Consistency {
+fn get_consistent_color(x: f32, y: f32, z: f32, images: &mut [Image], voxel_block: &VoxelBlock) -> Consistency {
     // for each image, project voxel to get projected pixel color
     // if all images roughly agree on color, then it is consistent
     let mut estimated_color: Option<Vector3<u8>> = None;
-    for image in images {
+    let mut image_indices = vec![];
+    for (i,image) in images.iter().enumerate() {
         match get_projected_pixel_color(x, y, z, image, voxel_block) {
-            ProjectedColor::Color(proj_color) => {
+            ProjectedColor::Color(proj_color, image_index) => {
                 // println!("({r},{g},{b})");
+                image_indices.push((i,image_index));
                 
                 // check if colors are similar
                 if let Some(est_color) = estimated_color {
@@ -301,6 +302,10 @@ fn get_consistent_color(x: f32, y: f32, z: f32, images: &Vec<Image>, voxel_block
         }
     }
     if let Some(color) = estimated_color {
+        // mark projected pixels
+        for (image, index) in image_indices {
+            images[image].marked[index] = true;
+        }
         Consistency::Consistent(color)
     } else {
         Consistency::Inconclusive
@@ -313,7 +318,7 @@ pub fn project_coordinate(x: f32, y: f32, z: f32, image: &Image, voxel_block: &V
     let x_half = x + half_voxel_length;
     let y_half = y + half_voxel_length;
     let z_half = z + half_voxel_length;
-    println!("shifted ({x_half},{y_half},{z_half})");
+    // println!("shifted ({x_half},{y_half},{z_half})");
     // convert from world space to projected/clip space
     let proj_coord = image.camera.proj_matrix
         * image.camera.view_matrix
@@ -343,86 +348,55 @@ pub fn project_coordinate(x: f32, y: f32, z: f32, image: &Image, voxel_block: &V
 fn get_projected_pixel_color(x: f32, y: f32, z: f32, image: &Image, voxel_block: &VoxelBlock) -> ProjectedColor {
     if let Some((x_index, y_index)) = project_coordinate(x, y, z, image, voxel_block) {
         let image_index = x_index + y_index * image.width;
-        println!("projected to {x_index}, {y_index}");
+        // only use if projected pixel is not marked
+        if image.marked[image_index] {
+            println!("pixel already marked");
+            return ProjectedColor::Unknown;
+        }
+        // println!("projected to {x_index}, {y_index}");
 
         // check if voxel is occluded
-        let ray = generate_ray(x_index, y_index, 1.0, &image.camera);
-        let dir = ray.d;
-        let pos = ray.p;
-        if let Some(intersect) = trace_ray(&ray, voxel_block) {
-            let expected_index = voxel_block.coordinate_to_index(x, y, z);
-            if intersect != expected_index {
-                // occluded
-                println!("ray dir: {}", dir);
-                println!("ray pos: {}", pos);
-                println!("({x_index},{y_index}): expected {expected_index}, actual {intersect}");
-                // return ProjectedColor::Unknown
-            }
-        } else {
-            // background detected (shouldn't happen??)
-            println!("({x_index},{y_index}) with ray pos {} and dir {} going to background unexpectedly", ray.p, ray.d);
-            // panic!();
-            // return ProjectedColor::Background;
-        }
-
-        // println!("original: ({},{},{})", x, y, z);
-        // println!("view: ({},{},{})", view_coord[0], view_coord[1], view_coord[2]);
-        // println!("projected: ({},{},{})", proj_coord[0], proj_coord[1], proj_coord[2]);
-        // println!("normed: ({},{},{})", normed_coord[0], normed_coord[1], normed_coord[2]);
-        // println!("index: ({},{})", x_index, y_index);
+        // let ray = generate_ray(x_index, y_index, 1.0, &image.camera);
+        // let half_voxel_length = voxel_block.voxel_length() / 2.0;
+        // let center = Vector3::new(x + half_voxel_length, y + half_voxel_length, z + half_voxel_length);
+        // let ray = generate_ray_direct(center.x, center.y, center.z, &image.camera);
+        // let dir = ray.d;
+        // let pos = ray.p;
+        // let expected_index = voxel_block.coordinate_to_index(x, y, z);
+        // if let Some(intersect) = trace_ray(&ray, voxel_block, expected_index) {
+        //     if intersect != expected_index {
+        //         // occluded
+        //         // println!("ray dir: {}", dir);
+        //         // println!("ray pos: {}", pos);
+        //         println!("({x_index},{y_index}): expected {expected_index}, actual {intersect}");
+        //         return ProjectedColor::Unknown
+        //     }
+        // } else {
+        //     // background detected (shouldn't happen)
+        //     println!("({x_index},{y_index}) with ray pos {} and dir {} going to background unexpectedly", ray.p, ray.d);
+        //     panic!();
+        // }
 
         let r = image.data[image_index * 3];
         let g = image.data[image_index * 3 + 1];
         let b = image.data[image_index * 3 + 2];
-        println!("color: ({},{},{})", r, g, b);
+        // println!("color: ({},{},{})", r, g, b);
         if r == 0 && g == 0 && b ==0  {
             ProjectedColor::Background
         } else {
-            ProjectedColor::Color(Vector3::new(r, g, b))
+            ProjectedColor::Color(Vector3::new(r, g, b), image_index)
         }
     } else {
         // out of view for this image
         ProjectedColor::Unknown
     }
-    // // center the coordinate in the voxel
-    // let half_voxel_length = voxel_block.length as f32 / voxel_block.resolution as f32 / 2.0;
-    // let x_half = x + half_voxel_length;
-    // let y_half = y + half_voxel_length;
-    // let z_half = z + half_voxel_length;
-    // println!("shifted ({x_half},{y_half},{z_half})");
-    // // convert from world space to projected/clip space
-    // let proj_coord: Vector3<f32> = Vector3::zeros();
-    // // image.camera.proj_matrix
-    // //     * image.camera.view_matrix
-    // //     * Vector4::new(x_half, y_half, z_half, 1.0);
-
-    // // normalize
-    // let normed_coord = Vector3::new(
-    //     proj_coord[0] / proj_coord[3],
-    //     proj_coord[1] / proj_coord[3],
-    //     proj_coord[2] / proj_coord[3],
-    // );
-
-    // // clip space goes from (-1,-1,0) to (1,1,1)
-    // // discard Z, and transform into image coordinates
-    // let x_index = ((normed_coord[0] + 1.0) / 2.0 * image.width as f32) as i32;
-    // let y_index = ((normed_coord[1] + 1.0) / 2.0 * image.height as f32) as i32;
-
-    // // check bounds
-    // if x_index < 0 || x_index >= image.width as i32 || y_index < 0 || y_index >= image.height as i32
-    // {
-    //     return ProjectedColor::Unknown;
-    // }
-    // let x_index = x_index as usize;
-    // let y_index = y_index as usize;
-    
 }
 
 
 /// checks whether value1 and value2 are within a defined number of values apart
 fn is_roughly_equal(value1: u8, value2: u8) -> bool {
     // return true;
-    let range = 50;
+    let range = 150;
 
     let min = if value1.checked_sub(range).is_none() {
         0
@@ -452,7 +426,6 @@ mod tests {
     use nalgebra::Vector3;
 
     use crate::carver::{average, is_roughly_equal};
-
 
     #[test]
     fn test_is_roughly_equal() {

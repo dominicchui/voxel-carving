@@ -30,7 +30,14 @@ pub(crate) fn generate_ray(
     let dir = get_ray_dir_for_pixel(i, j, k, camera);
     // convert ray to world space
     let p = camera.pos.push(1.0);
-    let d = camera.inv_view_matrix * dir;
+    let d = (camera.inv_view_matrix * dir).normalize();
+    Ray { p, d }
+}
+
+pub(crate) fn generate_ray_direct(x: f32, y: f32, z:f32, camera: &Camera) -> Ray {
+    // let p = Vector4::new(x,y,z,1.0);
+    let p = camera.pos.push(1.0);
+    let d =(Vector4::new(x,y,z, 1.0) - p).normalize();
     Ray { p, d }
 }
 
@@ -59,8 +66,9 @@ fn get_ray_dir_for_pixel(
 pub(crate) fn trace_ray(
     ray: &Ray,
     voxel_block: &VoxelBlock,
+    expected_index: usize
 ) -> Option<usize> {
-    find_closest_intersection(ray, voxel_block)
+    find_closest_intersection(ray, voxel_block, expected_index)
 }
 
 /// Returns the t value for the closest intersection of the ray from position p and direction d to the objects in the scene
@@ -68,13 +76,14 @@ pub(crate) fn trace_ray(
 pub(crate) fn find_closest_intersection(
     ray: &Ray,
     voxel_block: &VoxelBlock,
+    expected_index: usize
 ) -> Option<usize> {
     // for each shape, find the intersection t's
     let mut t_values: Vec<f32> = vec![f32::MAX; voxel_block.voxels.len()];
     
-    for x in 0..RESOLUTION {
-        for y in 0..RESOLUTION {
-            for z in 0..RESOLUTION {
+    for x in 0..voxel_block.resolution {
+        for y in 0..voxel_block.resolution {
+            for z in 0..voxel_block.resolution {
                 // convert coordinates to object space
                 let index = x
                 + y * voxel_block.resolution
@@ -89,8 +98,11 @@ pub(crate) fn find_closest_intersection(
                 // find intersect
                 if let Some(intersect) = find_cube_intersect(voxel, ray.p, ray.d) {
                     t_values[index] = intersect;
-                    // let intersect_pos = ray.p + ray.d * intersect;
-                    // println!("intersect with voxel {index} at t {intersect}, pos {intersect_pos}");
+                    let intersect_pos = ray.p + ray.d * intersect;
+                    if expected_index == 6 {
+                        println!("d {}", ray.d);
+                        println!("intersect with voxel {index} at t {intersect}, pos {intersect_pos}");
+                    }
                 }
             }
         }
@@ -108,125 +120,60 @@ pub(crate) fn find_closest_intersection(
     if min_index == -1 {
         None
     } else {
-        Some(min_index as usize)
+        let expected_t = t_values[expected_index];
+        if expected_t <= min_t + 0.001 {
+            // println!("good enough");
+            Some(expected_index)
+        } else {
+            Some(min_index as usize)
+        }
     }
 }
 
 
+#[cfg(test)]
+mod tests {
+    use nalgebra::{Perspective3, Point3, Vector3, Vector4};
 
-// pub(crate) fn compute_phong_lighting(
-//     normal: Vector4<f32>,
-//     lights: Vec<SceneLightData>,
-//     kd: f32,
-//     c_diffuse: Vector3<f32>
-// ) -> Vector3<f32> {
-//     // Normalize directions
-//     let normal = normal.normalize();
+    use crate::{raytracer::generate_ray_direct, scene_generator, voxel::{find_cube_intersect, VoxelBlock}};
 
-//     let mut illumination: Vector3<f32> = Vector3::zeros();
-    
-//     // compute diffuse for each light
-//     for light in lights {
-//         illumination += compute_contribution_of_light(normal, &light, kd, c_diffuse);
-//     }
-
-//     illumination
-// }
-
-// /// Returns the color contribution of a particular light to the color of the given intersection point
-// fn compute_contribution_of_light(
-//     // position: Vector4<f32>,
-//     normal: Vector4<f32>,
-//     // incident_dir: Vector4<f32>,
-//     // shape: &Shape,
-//     light: &SceneLightData,
-//     kd: f32,
-//     // shapes: &Vec<Shape>,
-//     c_diffuse: Vector3<f32>) -> Vector3<f32> {
-//     let (att, k, intersect_to_light_d) = compute_light_properties(light);
-//     let norm_dot_dir = f32::max(0.0, normal.dot(&intersect_to_light_d));
-
-//     // diffuse term
-//     let diffuse = kd * c_diffuse * norm_dot_dir;
-
-//     // todo figure out clamp
-//     // diff_spec_sum = nalgebra::clamp(diff_spec_sum, 0.0, 1.0);
-//     att * (diffuse.component_mul(&light.color)) * k
-// }
+    use super::{generate_ray, trace_ray};
 
 
-// fn compute_light_properties(
-//     // position: &Vector4<f32>,
-//     light: &SceneLightData,
-// ) -> (f32, f32, Vector4<f32>) {
-//     // intensity modifier:
-//     // 1 for point and directional lights
-//     // depends on falloff function for spot lights
-//     let mut k: f32 = 1.0;
-//     let mut intersect_to_light_d: Vector4<f32>;
-//     // let distance;
+    #[test]
+    fn test_trace_ray() {
+        let images = &mut scene_generator::cone();
+        let mut voxel_block = VoxelBlock::new(2, 2);
+        voxel_block.carve(1,1,1);
+        voxel_block.carve(0,1,1);
 
-//     // only point and spot lights attenuate
-//     let mut att = 1.0;
-//     match light.light_type {
-//         LightType::PointLight => {
-//             // distance = glm::distance(&position, &light.pos.unwrap());
-//             // att = f32::min(
-//             //     1.0,
-//             //     1.0 / (light.att_function.unwrap()[0]
-//             //         + distance * light.att_function.unwrap()[1]
-//             //         + distance * distance * light.att_function.unwrap()[2]),
-//             // );
-//             // intersect_to_light_d = light.pos.unwrap() - position;
-//             todo!();
-//         }
-//         LightType::DirectionalLight => intersect_to_light_d = -light.dir.unwrap(),
-//         LightType::SpotLight => {
-//             todo!();
-//             // distance = glm::distance(&position, &light.pos.unwrap());
-//             // att = f32::min(
-//             //     1.0,
-//             //     1.0 / (light.att_function.unwrap()[0]
-//             //         + distance * light.att_function.unwrap()[1]
-//             //         + distance * distance * light.att_function.unwrap()[2]),
-//             // );
-//             // intersect_to_light_d = light.pos.unwrap() - position;
-//             // k = compute_angular_falloff(
-//             //     light.dir.unwrap(),
-//             //     intersect_to_light_d,
-//             //     light.angle.unwrap() - light.penumbra.unwrap(),
-//             //     light.angle.unwrap(),
-//             // );
-//         }
-//     }
-//     intersect_to_light_d = (&intersect_to_light_d).normalize();
-//     (att, k, intersect_to_light_d)
-// }
+        let ray = generate_ray(569, 417, 1.0, &images[0].camera);
+        let dir = ray.d;
+        let pos = ray.p;
+        println!("ray pos {pos}, ray dir {dir}");
 
+        let ray_direct = generate_ray_direct(-0.5, -0.5, 0.5, &images[0].camera);
+        let dir = ray_direct.d;
+        let pos = ray_direct.p;
+        println!("ray_direct pos {pos}, ray dir {dir}");
 
-// #[cfg(test)]
-// mod tests {
-//     use nalgebra::{Vector3, Vector4};
+        let voxel = &voxel_block.voxels[4];
+        // println!("center {}", voxel.ctm * Vector4::new(0.0,0.0,0.0, 1.0));
+        // println!("corner {}", voxel.ctm * Vector4::new(-0.5, -0.5, -0.5, 1.0));
+        // println!("camera {}", voxel.ctm * Vector4::new(3.5, 3.5, 2.5, 1.0));
+        assert_eq!(Vector4::new(0.0, 0.0, 0.0, 1.0), voxel.inverse_ctm * Vector4::new(-0.5, -0.5, 0.5, 1.0));
+        assert_eq!(Vector4::new(3.0,3.0,3.0,1.0), voxel.inverse_ctm * Vector4::new(2.5, 2.5, 3.5, 1.0));
+        let intersect = find_cube_intersect(voxel, pos, dir);
+        assert!(intersect.is_some());
 
-//     use super::{compute_contribution_of_light, SceneLightData};
+        let intersected_voxel = trace_ray(&ray_direct, &voxel_block, 4);
+        assert!(intersected_voxel.is_some());
+        assert_eq!(intersected_voxel.unwrap(),4);
 
-//     #[test]
-//     fn test_compute_contribution_of_light() {
-//         let light = SceneLightData {
-//             light_type: super::LightType::DirectionalLight,
-//             color: Vector3::new(1.0, 1.0, 1.0),
-//             dir: Some(Vector4::new(-3.0, -2.0, -1.0, 0.0)),
-//             pos: None
-//         };
-//         let kd = 0.5;
-//         let c_diffuse = Vector3::new(1.0, 0.0, 0.0);
-//         let normal = Vector4::new(1.0, 0.0, 0.0, 0.0);
-//         let color = compute_contribution_of_light(normal, &light, kd, c_diffuse);
-//         println!("color1: {}", color);
-        
-//         let normal = Vector4::new(0.0, 1.0, 0.0, 0.0);
-//         let color = compute_contribution_of_light(normal, &light, kd, c_diffuse);
-//         println!("color2: {}", color);
-//     }
+        // the issue:
+        // the voxel projects onto the image at (i,j)
+        // when a ray is traced from (i,j) into the scene, it does not intersect with the voxel ?!
 
-// }
+    }
+
+}
