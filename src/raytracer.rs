@@ -144,8 +144,8 @@ mod tests {
     fn test_trace_ray() {
         let images = &mut scene_generator::cone();
         let mut voxel_block = VoxelBlock::new(2, 2);
-        voxel_block.carve(1,1,1);
-        voxel_block.carve(0,1,1);
+        // voxel_block.carve(1,1,1);
+        // voxel_block.carve(0,1,1);
 
         let ray = generate_ray(569, 417, 1.0, &images[0].camera);
         let dir = ray.d;

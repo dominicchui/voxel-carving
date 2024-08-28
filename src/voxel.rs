@@ -1,18 +1,16 @@
 use std::{
-    collections::HashMap,
     fs::File,
     io::Write,
     ops::{Index, IndexMut},
 };
 
-use nalgebra::{base, Matrix4, Translation3, Vector3, Vector4};
+use nalgebra::{Matrix4, Translation3, Vector3, Vector4};
 use ordered_float::OrderedFloat;
 
 #[derive(Default, Clone, Debug)]
 pub(crate) struct Voxel {
     pub(crate) carved: bool,
     pub(crate) visible: bool,
-    pub(crate) seen: bool,
     // estimated (diffuse) color of the voxel
     pub(crate) color: Option<Vector3<u8>>,
     pub(crate) ctm: Matrix4<f32>,
@@ -59,7 +57,6 @@ impl Voxel {
         Voxel {
             carved: false,
             visible: false,
-            seen: false,
             color: None,
             ctm: Matrix4::identity(),
             inverse_ctm: Matrix4::identity()
@@ -73,8 +70,8 @@ impl VoxelBlock {
         
         let voxel_length = length as f32 / resolution as f32;
         let baseline_shift = -(length as f32 / 2.0 - 0.5 * voxel_length);
-        println!("voxel_length: {}", voxel_length);
-        println!("baseline_shift: {}", baseline_shift);
+        // println!("voxel_length: {}", voxel_length);
+        // println!("baseline_shift: {}", baseline_shift);
         
         // make boundary as surface and set CTM
         for x in 0..resolution {
@@ -195,7 +192,6 @@ impl VoxelBlock {
                     let voxel = &self.voxels[voxel_index];
                     if voxel.carved {
                         carved += 1;
-                        continue;
                     } else if voxel.color.is_some() {
                         consistent += 1;
                     } else {
@@ -261,14 +257,12 @@ impl VoxelBlock {
         println!("Inconclusive {inconclusive}");
     }
 
-    pub fn carve(&mut self, x: usize, y: usize, z: usize) {
+    pub fn carve(&mut self, index: usize) {
         let res_squared = self.resolution * self.resolution;
-        let index = x + y * self.resolution + z * res_squared;
         let voxel = &mut self.voxels[index];
         voxel.carved = true;
         voxel.visible = false;
-        voxel.seen = true;
-        println!("carve {index} at ({x},{y},{z})");
+        // println!("carve {index} at ({x},{y},{z})");
 
         // mark 8 neighbors as visible
         let max_index = (res_squared * self.resolution) as i32;
@@ -360,17 +354,17 @@ pub(crate) fn is_valid_cube_t(p: Vector4<f32>, d: Vector4<f32>, t: f32) -> bool 
     let y = intersect[1];
     let z = intersect[2];
 
-    let bounds = 0.5;
+    let bounds = 0.5 + 0.001;
 
     // println!("({x},{y},{z})");
 
     // check finite boundaries
-    !(x <= -bounds
-        || x >= bounds
-        || y <= -bounds
-        || y >= bounds
-        || z <= -bounds
-        || z >= bounds)
+    !(x < -bounds
+        || x > bounds
+        || y < -bounds
+        || y > bounds
+        || z < -bounds
+        || z > bounds)
 }
 
 #[cfg(test)]
