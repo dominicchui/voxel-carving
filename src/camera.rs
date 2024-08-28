@@ -29,7 +29,7 @@ impl Camera {
     ) -> Self {
         let eye = Point3::from(pos);
         let target = Point3::from(target);
-        let view_matrix   = Isometry3::look_at_rh(&eye, &target, &Vector3::y());
+        let view_matrix = Isometry3::look_at_rh(&eye, &target, &Vector3::y());
         let inv_view_matrix = view_matrix.inverse();
 
         // projection matrix
@@ -76,7 +76,7 @@ impl Camera {
             up,
             height_angle,
             view_matrix: view_matrix.to_homogeneous(),
-            inv_view_matrix : inv_view_matrix.to_homogeneous(),
+            inv_view_matrix: inv_view_matrix.to_homogeneous(),
             proj_matrix,
             near,
             far,

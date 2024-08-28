@@ -1,8 +1,6 @@
 use nalgebra::{Vector3, Vector4};
 
-use crate::{
-    image::Image, voxel::VoxelBlock
-};
+use crate::{image::Image, voxel::VoxelBlock};
 
 enum Consistency {
     Consistent(Vector3<u8>),
@@ -14,14 +12,14 @@ enum Consistency {
 enum ProjectedColor {
     Color(Vector3<u8>),
     Background,
-    Unknown
+    Unknown,
 }
 
 #[derive(Debug)]
 enum Plane {
     X,
     Y,
-    Z
+    Z,
 }
 
 /// given voxelblock and image, for each voxel, project ray to each camera and get pixel and color
@@ -33,10 +31,13 @@ pub(crate) fn carve(voxel_block: &mut VoxelBlock, images: &mut [Image]) {
         println!("loop!");
         let mut carved_count = 0;
         let sweeps = vec![
-            (Plane::X, false), (Plane::X, true),
-            (Plane::Y, false), (Plane::Y, true),
-            (Plane::Z, false), (Plane::Z, true)
-            ];
+            (Plane::X, false),
+            (Plane::X, true),
+            (Plane::Y, false),
+            (Plane::Y, true),
+            (Plane::Z, false),
+            (Plane::Z, true),
+        ];
 
         for (plane, reverse) in sweeps {
             println!("sweep plane {plane:?} reversed? {reverse}");
@@ -50,7 +51,12 @@ pub(crate) fn carve(voxel_block: &mut VoxelBlock, images: &mut [Image]) {
     }
 }
 
-fn sweep_plane(plane: &Plane, reverse: bool, images: &mut [Image], voxel_block: &mut VoxelBlock) -> usize {
+fn sweep_plane(
+    plane: &Plane,
+    reverse: bool,
+    images: &mut [Image],
+    voxel_block: &mut VoxelBlock,
+) -> usize {
     let plane_bounds: Box<dyn Iterator<Item = _>> = if reverse {
         Box::new((0..voxel_block.resolution).rev())
     } else {
@@ -62,30 +68,32 @@ fn sweep_plane(plane: &Plane, reverse: bool, images: &mut [Image], voxel_block: 
     for image in images {
         match plane {
             Plane::X => {
-                if (reverse && image.camera.look.x < 0.0) || (!reverse && image.camera.look.x > 0.0) {
+                if (reverse && image.camera.look.x < 0.0) || (!reverse && image.camera.look.x > 0.0)
+                {
                     println!("{}", image.camera.pos);
                     valid_images.push(image);
                 }
-            },
+            }
             Plane::Y => {
-                if (reverse && image.camera.look.y < 0.0) || (!reverse && image.camera.look.y > 0.0) {
+                if (reverse && image.camera.look.y < 0.0) || (!reverse && image.camera.look.y > 0.0)
+                {
                     println!("{}", image.camera.pos);
                     valid_images.push(image);
                 }
-            },
+            }
             Plane::Z => {
-                if (reverse && image.camera.look.z < 0.0) || (!reverse && image.camera.look.z > 0.0) {
+                if (reverse && image.camera.look.z < 0.0) || (!reverse && image.camera.look.z > 0.0)
+                {
                     println!("{}", image.camera.pos);
                     valid_images.push(image);
                 }
-            },
+            }
         }
     }
 
     // sweep through the slices
     let mut carved_count = 0;
     for a in plane_bounds {
-
         // reset marked pixels
         // for image in &mut *valid_images {
         //     image.marked = vec![false; image.data.len()/3];
@@ -95,14 +103,14 @@ fn sweep_plane(plane: &Plane, reverse: bool, images: &mut [Image], voxel_block: 
         for b in 0..voxel_block.resolution {
             for c in 0..voxel_block.resolution {
                 // get coordinate of voxel
-                let (x,y,z) = match plane {
-                    Plane::X => (a,c,b),
-                    Plane::Y => (b,a,c),
-                    Plane::Z => (c,b,a),
+                let (x, y, z) = match plane {
+                    Plane::X => (a, c, b),
+                    Plane::Y => (b, a, c),
+                    Plane::Z => (c, b, a),
                 };
                 let index = x
-                            + y * voxel_block.resolution
-                            + z * voxel_block.resolution * voxel_block.resolution;
+                    + y * voxel_block.resolution
+                    + z * voxel_block.resolution * voxel_block.resolution;
                 // skip not visible voxels
                 let voxel = &mut voxel_block.voxels[index];
                 if !voxel.visible || voxel.carved {
@@ -110,21 +118,21 @@ fn sweep_plane(plane: &Plane, reverse: bool, images: &mut [Image], voxel_block: 
                 }
 
                 match should_carve_voxel(index, valid_images, voxel_block) {
-                    Consistency::Consistent(color) =>{
+                    Consistency::Consistent(color) => {
                         let voxel = &mut voxel_block.voxels[index];
                         voxel.color = Some(color);
-                    },
+                    }
                     Consistency::Inconsistent => {
                         // println!("inconsistent");
                         carved.push(index);
-                    },
+                    }
                     Consistency::Inconclusive => {
                         // println!("Inconclusive");
-                    },
+                    }
                     Consistency::Background => {
                         // println!("background");
                         carved.push(index);
-                    },
+                    }
                 }
             }
         }
@@ -137,15 +145,19 @@ fn sweep_plane(plane: &Plane, reverse: bool, images: &mut [Image], voxel_block: 
     carved_count
 }
 
-fn should_carve_voxel(index: usize, images: &mut [&mut Image], voxel_block: &mut VoxelBlock) -> Consistency {
-    let (x,y,z) = voxel_block.index_to_coordinate(index);
+fn should_carve_voxel(
+    index: usize,
+    images: &mut [&mut Image],
+    voxel_block: &mut VoxelBlock,
+) -> Consistency {
+    let (x, y, z) = voxel_block.index_to_coordinate(index);
     let mut projected_colors = vec![];
     for image in images {
-        if let Some(projected_index) = project_coordinate(x,y,z,image, voxel_block) {
+        if let Some(projected_index) = project_coordinate(x, y, z, image, voxel_block) {
             let r = image.data[projected_index * 3];
             let g = image.data[projected_index * 3 + 1];
             let b = image.data[projected_index * 3 + 2];
-            if r == 0 && g == 0 && b ==0  {
+            if r == 0 && g == 0 && b == 0 {
                 return Consistency::Background;
             } else {
                 let color = Vector3::new(r, g, b);
@@ -155,14 +167,20 @@ fn should_carve_voxel(index: usize, images: &mut [&mut Image], voxel_block: &mut
     }
     if projected_colors.is_empty() {
         Consistency::Inconclusive
-    } else if let Some(color) = colors_roughly_equal(projected_colors) { 
+    } else if let Some(color) = colors_roughly_equal(projected_colors) {
         Consistency::Consistent(color)
     } else {
         Consistency::Inconsistent
     }
 }
 
-pub fn project_coordinate(x: f32, y: f32, z: f32, image: &Image, voxel_block: &VoxelBlock) -> Option<usize> {
+pub fn project_coordinate(
+    x: f32,
+    y: f32,
+    z: f32,
+    image: &Image,
+    voxel_block: &VoxelBlock,
+) -> Option<usize> {
     // center the coordinate in the voxel
     let half_voxel_length = voxel_block.length as f32 / voxel_block.resolution as f32 / 2.0;
     let x_half = x + half_voxel_length;
@@ -201,7 +219,6 @@ pub fn project_coordinate(x: f32, y: f32, z: f32, image: &Image, voxel_block: &V
     Some(index)
 }
 
-
 /// checks whether value1 and value2 are within a defined number of values apart
 fn is_roughly_equal(value1: u8, value2: u8, threshold: u8) -> bool {
     let min = if value1.checked_sub(threshold).is_none() {
@@ -235,15 +252,15 @@ fn colors_roughly_equal(colors: Vec<Vector3<u8>>) -> Option<Vector3<u8>> {
     let g_avg = (g_total / count) as u8;
     let b_avg = (b_total / count) as u8;
     for color in &colors {
-        if !is_roughly_equal(r_avg, color[0], range) || 
-            !is_roughly_equal(g_avg, color[1], range) || 
-            !is_roughly_equal(b_avg, color[2], range) {
+        if !is_roughly_equal(r_avg, color[0], range)
+            || !is_roughly_equal(g_avg, color[1], range)
+            || !is_roughly_equal(b_avg, color[2], range)
+        {
             return None;
         }
     }
     Some(Vector3::new(r_avg, g_avg, b_avg))
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -253,16 +270,16 @@ mod tests {
 
     #[test]
     fn test_is_roughly_equal() {
-        assert!(is_roughly_equal(10,10, 10));
-        assert!(is_roughly_equal(10,12, 10));
-        assert!(is_roughly_equal(12,10, 10));
-        assert!(is_roughly_equal(20,10, 10));
-        assert!(is_roughly_equal(10,20, 10));
-        assert!(is_roughly_equal(5,10, 10));
-        assert!(is_roughly_equal(10,5, 10));
-        assert!(is_roughly_equal(254,250, 10));
-        assert!(is_roughly_equal(250,254, 10));
-        assert!(!is_roughly_equal(22,10, 10));
-        assert!(!is_roughly_equal(10,22, 10));
+        assert!(is_roughly_equal(10, 10, 10));
+        assert!(is_roughly_equal(10, 12, 10));
+        assert!(is_roughly_equal(12, 10, 10));
+        assert!(is_roughly_equal(20, 10, 10));
+        assert!(is_roughly_equal(10, 20, 10));
+        assert!(is_roughly_equal(5, 10, 10));
+        assert!(is_roughly_equal(10, 5, 10));
+        assert!(is_roughly_equal(254, 250, 10));
+        assert!(is_roughly_equal(250, 254, 10));
+        assert!(!is_roughly_equal(22, 10, 10));
+        assert!(!is_roughly_equal(10, 22, 10));
     }
 }

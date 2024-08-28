@@ -1,6 +1,10 @@
 use nalgebra::{Vector3, Vector4};
 
-use crate::{camera::Camera, voxel::{find_cube_intersect, Voxel, VoxelBlock}, RESOLUTION};
+use crate::{
+    camera::Camera,
+    voxel::{find_cube_intersect, Voxel, VoxelBlock},
+    RESOLUTION,
+};
 
 pub(crate) enum LightType {
     PointLight,
@@ -21,12 +25,7 @@ pub(crate) struct Ray {
     pub(crate) d: Vector4<f32>,
 }
 
-pub(crate) fn generate_ray(
-    i: usize,
-    j: usize,
-    k: f32,
-    camera: &Camera
-) -> Ray {
+pub(crate) fn generate_ray(i: usize, j: usize, k: f32, camera: &Camera) -> Ray {
     let dir = get_ray_dir_for_pixel(i, j, k, camera);
     // convert ray to world space
     let p = camera.pos.push(1.0);
@@ -34,20 +33,15 @@ pub(crate) fn generate_ray(
     Ray { p, d }
 }
 
-pub(crate) fn generate_ray_direct(x: f32, y: f32, z:f32, camera: &Camera) -> Ray {
+pub(crate) fn generate_ray_direct(x: f32, y: f32, z: f32, camera: &Camera) -> Ray {
     // let p = Vector4::new(x,y,z,1.0);
     let p = camera.pos.push(1.0);
-    let d =(Vector4::new(x,y,z, 1.0) - p).normalize();
+    let d = (Vector4::new(x, y, z, 1.0) - p).normalize();
     Ray { p, d }
 }
 
 /// For pixel[i,j], this computes and returns the direction from the camera to that pixel in camera space
-fn get_ray_dir_for_pixel(
-    i: usize,
-    j: usize,
-    k: f32,
-    camera: &Camera,
-) -> Vector4<f32> {
+fn get_ray_dir_for_pixel(i: usize, j: usize, k: f32, camera: &Camera) -> Vector4<f32> {
     let x = (i as f32 + 0.5) / camera.width as f32 - 0.5;
     let y = (j as f32 + 0.5) / camera.height as f32 - 0.5;
     let aspect_ratio = camera.get_aspect_ratio();
@@ -66,7 +60,7 @@ fn get_ray_dir_for_pixel(
 pub(crate) fn trace_ray(
     ray: &Ray,
     voxel_block: &VoxelBlock,
-    expected_index: usize
+    expected_index: usize,
 ) -> Option<usize> {
     find_closest_intersection(ray, voxel_block, expected_index)
 }
@@ -76,20 +70,20 @@ pub(crate) fn trace_ray(
 pub(crate) fn find_closest_intersection(
     ray: &Ray,
     voxel_block: &VoxelBlock,
-    expected_index: usize
+    expected_index: usize,
 ) -> Option<usize> {
     // for each shape, find the intersection t's
     let mut t_values: Vec<f32> = vec![f32::MAX; voxel_block.voxels.len()];
-    
+
     for x in 0..voxel_block.resolution {
         for y in 0..voxel_block.resolution {
             for z in 0..voxel_block.resolution {
                 // convert coordinates to object space
                 let index = x
-                + y * voxel_block.resolution
-                + z * voxel_block.resolution * voxel_block.resolution;
+                    + y * voxel_block.resolution
+                    + z * voxel_block.resolution * voxel_block.resolution;
 
-                // skip not visible voxels 
+                // skip not visible voxels
                 let voxel = &voxel_block.voxels[index];
                 if !voxel.visible {
                     continue;
@@ -101,7 +95,9 @@ pub(crate) fn find_closest_intersection(
                     let intersect_pos = ray.p + ray.d * intersect;
                     if expected_index == 6 {
                         println!("d {}", ray.d);
-                        println!("intersect with voxel {index} at t {intersect}, pos {intersect_pos}");
+                        println!(
+                            "intersect with voxel {index} at t {intersect}, pos {intersect_pos}"
+                        );
                     }
                 }
             }
@@ -130,15 +126,17 @@ pub(crate) fn find_closest_intersection(
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use nalgebra::{Perspective3, Point3, Vector3, Vector4};
 
-    use crate::{raytracer::generate_ray_direct, scene_generator, voxel::{find_cube_intersect, VoxelBlock}};
+    use crate::{
+        raytracer::generate_ray_direct,
+        scene_generator,
+        voxel::{find_cube_intersect, VoxelBlock},
+    };
 
     use super::{generate_ray, trace_ray};
-
 
     #[test]
     fn test_trace_ray() {
@@ -161,19 +159,23 @@ mod tests {
         // println!("center {}", voxel.ctm * Vector4::new(0.0,0.0,0.0, 1.0));
         // println!("corner {}", voxel.ctm * Vector4::new(-0.5, -0.5, -0.5, 1.0));
         // println!("camera {}", voxel.ctm * Vector4::new(3.5, 3.5, 2.5, 1.0));
-        assert_eq!(Vector4::new(0.0, 0.0, 0.0, 1.0), voxel.inverse_ctm * Vector4::new(-0.5, -0.5, 0.5, 1.0));
-        assert_eq!(Vector4::new(3.0,3.0,3.0,1.0), voxel.inverse_ctm * Vector4::new(2.5, 2.5, 3.5, 1.0));
+        assert_eq!(
+            Vector4::new(0.0, 0.0, 0.0, 1.0),
+            voxel.inverse_ctm * Vector4::new(-0.5, -0.5, 0.5, 1.0)
+        );
+        assert_eq!(
+            Vector4::new(3.0, 3.0, 3.0, 1.0),
+            voxel.inverse_ctm * Vector4::new(2.5, 2.5, 3.5, 1.0)
+        );
         let intersect = find_cube_intersect(voxel, pos, dir);
         assert!(intersect.is_some());
 
         let intersected_voxel = trace_ray(&ray_direct, &voxel_block, 4);
         assert!(intersected_voxel.is_some());
-        assert_eq!(intersected_voxel.unwrap(),4);
+        assert_eq!(intersected_voxel.unwrap(), 4);
 
         // the issue:
         // the voxel projects onto the image at (i,j)
         // when a ray is traced from (i,j) into the scene, it does not intersect with the voxel ?!
-
     }
-
 }

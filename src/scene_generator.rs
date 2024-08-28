@@ -98,7 +98,9 @@ pub(crate) fn three_cylinders() -> Vec<Image> {
         width,
         height,
     );
-    vec![image_0, image_1, image_2, image_3, image_4, image_5, image_6, image_7, image_8, image_9]
+    vec![
+        image_0, image_1, image_2, image_3, image_4, image_5, image_6, image_7, image_8, image_9,
+    ]
 }
 
 pub(crate) fn cone() -> Vec<Image> {
@@ -188,7 +190,7 @@ pub(crate) fn cone() -> Vec<Image> {
         width,
         height,
     );
-    vec![image_0, image_1, image_2, image_3, image_4]//, image_5, image_6, image_7, image_8]
+    vec![image_0, image_1, image_2, image_3, image_4] //, image_5, image_6, image_7, image_8]
 }
 
 pub(crate) fn two_cones() -> Vec<Image> {
@@ -287,5 +289,7 @@ pub(crate) fn two_cones() -> Vec<Image> {
         width,
         height,
     );
-    vec![image_0, image_1, image_2, image_3, image_4, image_5, image_6, image_7, image_8, image_9]
+    vec![
+        image_0, image_1, image_2, image_3, image_4, image_5, image_6, image_7, image_8, image_9,
+    ]
 }

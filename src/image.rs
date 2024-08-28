@@ -25,7 +25,7 @@ impl Image {
     ) -> Self {
         // read from file
         let image = open(file_path).unwrap().into_rgb8().into_vec();
-        let marked = vec![false; image.len()/3];
+        let marked = vec![false; image.len() / 3];
 
         let look = focus - pos;
         let near = 0.01;

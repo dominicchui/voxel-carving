@@ -59,7 +59,7 @@ impl Voxel {
             visible: false,
             color: None,
             ctm: Matrix4::identity(),
-            inverse_ctm: Matrix4::identity()
+            inverse_ctm: Matrix4::identity(),
         }
     }
 }
@@ -67,12 +67,12 @@ impl Voxel {
 impl VoxelBlock {
     pub fn new(length: usize, resolution: usize) -> Self {
         let mut voxels = vec![Voxel::new(); resolution * resolution * resolution];
-        
+
         let voxel_length = length as f32 / resolution as f32;
         let baseline_shift = -(length as f32 / 2.0 - 0.5 * voxel_length);
         // println!("voxel_length: {}", voxel_length);
         // println!("baseline_shift: {}", baseline_shift);
-        
+
         // make boundary as surface and set CTM
         for x in 0..resolution {
             for y in 0..resolution {
@@ -101,7 +101,7 @@ impl VoxelBlock {
         VoxelBlock {
             voxels,
             length,
-            resolution
+            resolution,
         }
     }
 
@@ -144,14 +144,26 @@ impl VoxelBlock {
         (x - half, y - half, z - half)
     }
 
-    fn calculate_ctm(x: usize, y: usize, z: usize, voxel_length: f32, baseline_shift: f32) -> Matrix4<f32> {
+    fn calculate_ctm(
+        x: usize,
+        y: usize,
+        z: usize,
+        voxel_length: f32,
+        baseline_shift: f32,
+    ) -> Matrix4<f32> {
         let scale = Matrix4::new_scaling(voxel_length);
         let trans = Self::translation(x, y, z, voxel_length, baseline_shift);
         let mat: Matrix4<f32> = Matrix4::identity();
         mat * trans * scale
     }
 
-    fn translation(x: usize, y: usize, z: usize, voxel_length: f32, baseline_shift: f32) -> Matrix4<f32> {
+    fn translation(
+        x: usize,
+        y: usize,
+        z: usize,
+        voxel_length: f32,
+        baseline_shift: f32,
+    ) -> Matrix4<f32> {
         let x_shift = x as f32 * voxel_length + baseline_shift;
         let y_shift = y as f32 * voxel_length + baseline_shift;
         let z_shift = z as f32 * voxel_length + baseline_shift;
@@ -312,13 +324,17 @@ impl VoxelBlock {
     }
 }
 
-pub(crate) fn find_cube_intersect(voxel: &Voxel, pos: Vector4<f32>, dir: Vector4<f32>) -> Option<f32> {
+pub(crate) fn find_cube_intersect(
+    voxel: &Voxel,
+    pos: Vector4<f32>,
+    dir: Vector4<f32>,
+) -> Option<f32> {
     // let error: f32 = 0.001;
     let p = voxel.inverse_ctm * pos;
     let d = voxel.inverse_ctm * dir; //+ error * dir;
-    // println!("world-space p {pos}");
-    // println!("object-space p {p}");
-    // println!("dir {d}");
+                                     // println!("world-space p {pos}");
+                                     // println!("object-space p {p}");
+                                     // println!("dir {d}");
     let t_x_neg = (-0.5 - p.x) / d.x;
     let t_x_pos = (0.5 - p.x) / d.x;
     let t_y_neg = (-0.5 - p.y) / d.y;
@@ -349,7 +365,7 @@ pub(crate) fn is_valid_cube_t(p: Vector4<f32>, d: Vector4<f32>, t: f32) -> bool 
     if t <= 0.0 {
         return false;
     }
-    let intersect = p + (t+0.001) * d;
+    let intersect = p + (t + 0.001) * d;
     let x = intersect[0];
     let y = intersect[1];
     let z = intersect[2];
@@ -359,12 +375,7 @@ pub(crate) fn is_valid_cube_t(p: Vector4<f32>, d: Vector4<f32>, t: f32) -> bool 
     // println!("({x},{y},{z})");
 
     // check finite boundaries
-    !(x < -bounds
-        || x > bounds
-        || y < -bounds
-        || y > bounds
-        || z < -bounds
-        || z > bounds)
+    !(x < -bounds || x > bounds || y < -bounds || y > bounds || z < -bounds || z > bounds)
 }
 
 #[cfg(test)]
@@ -393,15 +404,27 @@ mod tests {
         // convert to world space
         let ctm = voxel.ctm;
         println!("ctm {}", ctm);
-        assert_eq!(ctm * Vector4::new(-0.5, -0.5, -0.5, 1.0), Vector4::new(-1.0,-1.0,-1.0, 1.0));
-        assert_eq!(ctm * Vector4::new(0.0, 0.0, 0.0, 1.0), Vector4::new(-0.5,-0.5,-0.5, 1.0));
+        assert_eq!(
+            ctm * Vector4::new(-0.5, -0.5, -0.5, 1.0),
+            Vector4::new(-1.0, -1.0, -1.0, 1.0)
+        );
+        assert_eq!(
+            ctm * Vector4::new(0.0, 0.0, 0.0, 1.0),
+            Vector4::new(-0.5, -0.5, -0.5, 1.0)
+        );
 
         let voxel = &voxel_block.voxels[3];
         // convert to world space
         let ctm = voxel.ctm;
         println!("ctm {}", ctm);
-        assert_eq!(ctm * Vector4::new(-0.5, -0.5, -0.5, 1.0), Vector4::new(0.0,0.0,-1.0, 1.0));
-        assert_eq!(ctm * Vector4::new(0.0, 0.0, 0.0, 1.0), Vector4::new(0.5,0.5,-0.5, 1.0));
+        assert_eq!(
+            ctm * Vector4::new(-0.5, -0.5, -0.5, 1.0),
+            Vector4::new(0.0, 0.0, -1.0, 1.0)
+        );
+        assert_eq!(
+            ctm * Vector4::new(0.0, 0.0, 0.0, 1.0),
+            Vector4::new(0.5, 0.5, -0.5, 1.0)
+        );
     }
 
     #[test]
@@ -409,9 +432,14 @@ mod tests {
         let voxel_block = VoxelBlock::new(2, 2);
         let voxel = &voxel_block.voxels[4];
         let pos = Vector4::new(-0.5, -0.5, 2.5, 1.0);
-        let (x,y,z) = voxel_block.index_to_coordinate(4);
+        let (x, y, z) = voxel_block.index_to_coordinate(4);
         let half_voxel_length = 0.5;
-        let voxel_pos = Vector4::new(x+half_voxel_length,y+half_voxel_length,z+half_voxel_length,1.0);
+        let voxel_pos = Vector4::new(
+            x + half_voxel_length,
+            y + half_voxel_length,
+            z + half_voxel_length,
+            1.0,
+        );
         println!("voxel pos {voxel_pos}");
         let dir = voxel_pos - pos;
 
